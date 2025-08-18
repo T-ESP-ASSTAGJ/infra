@@ -1,0 +1,61 @@
+name: 🎯 Gitmoji Auto Deploy
+
+on:
+  workflow_call:
+    inputs:
+      repository_name:
+        required: true
+        type: string
+        description: "Name of the repository (api, client, etc.)"
+    secrets:
+      AUTO_DEPLOY_TOKEN:
+        required: true
+        description: "GitHub token with push/PR permissions"
+
+jobs:
+  auto-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.AUTO_DEPLOY_TOKEN }}
+
+      - name: Check commit and deploy
+        env:
+          GH_TOKEN: ${{ secrets.AUTO_DEPLOY_TOKEN }}
+        run: |
+          COMMIT_MSG=$(git log -1 --format="%s")
+          BRANCH=${GITHUB_REF#refs/heads/}
+          
+          echo "🔍 Analyzing commit: $COMMIT_MSG"
+          echo "📍 Branch: $BRANCH"
+          echo "📦 Repository: ${{ inputs.repository_name }}"
+          
+          # :ambulance: = direct push to main
+          if [[ "$COMMIT_MSG" =~ :ambulance: ]]; then
+            echo "🚑 Hotfix detected - pushing to main"
+            git config user.name "GitHub Actions [Auto-Deploy]"
+            git config user.email "actions@github.com"
+            git push origin HEAD:main
+            echo "✅ Hotfix deployed to main"
+          
+          # Other gitmoji codes = create PR to staging
+          elif [[ "$COMMIT_MSG" =~ (:sparkles:|:bug:|:rocket:|:recycle:|:art:|:lipstick:|:zap:|:wrench:) ]]; then
+            echo "✨ Feature detected - creating PR to staging"
+          
+            # Check if PR already exists
+            if ! gh pr list --head "$BRANCH" --base staging | grep -q "$BRANCH"; then
+              gh pr create \
+                --title "$COMMIT_MSG" \
+                --body "🤖 Auto-created from gitmoji commit in ${{ inputs.repository_name }}" \
+                --base staging \
+                --head "$BRANCH" \
+                --label "auto-deploy"
+              echo "✅ PR created to staging"
+            else
+              echo "ℹ️ PR already exists"
+            fi
+          
+          else
+            echo "ℹ️ No deployment action needed"
+          fi
