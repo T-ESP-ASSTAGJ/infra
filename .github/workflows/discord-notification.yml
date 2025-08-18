@@ -1,0 +1,214 @@
+name: 🎉 Discord Notification
+
+on:
+  workflow_call:
+    inputs:
+      repository_name:
+        required: true
+        type: string
+        description: "Name of the repository (api, client, infra)"
+      target_branch:
+        required: false
+        type: string
+        default: "main"
+        description: "The branch that was pushed to (main, staging, etc.)"
+    secrets:
+      DISCORD_WEBHOOK_URL:
+        required: true
+        description: "Discord webhook URL for notifications"
+
+jobs:
+  discord-notification:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get commit and merge information
+        id: git-info
+        run: |
+          # Get the latest commit info
+          COMMIT_SHA=$(git rev-parse HEAD)
+          SHORT_SHA=${COMMIT_SHA:0:7}
+          COMMIT_MSG=$(git log -1 --format="%s")
+          AUTHOR_NAME=$(git log -1 --format="%an")
+          COMMIT_URL="https://github.com/${{ github.repository }}/commit/${COMMIT_SHA}"
+          REPO_URL="https://github.com/${{ github.repository }}"
+          
+          # Check if this is a merge commit (has more than 1 parent)
+          PARENT_COUNT=$(git cat-file -p HEAD | grep "^parent " | wc -l)
+          
+          if [[ $PARENT_COUNT -gt 1 ]]; then
+            # This is a merge commit
+            IS_MERGE="true"
+            
+            # Try to extract branch name from merge commit message
+            # Pattern: "Merge pull request #123 from user/branch-name"
+            MERGED_BRANCH=$(echo "$COMMIT_MSG" | sed -n 's/.*Merge pull request #[0-9]* from [^/]*\/\(.*\)/\1/p')
+            
+            # Alternative pattern: "Merge branch 'branch-name'"
+            if [[ -z "$MERGED_BRANCH" ]]; then
+              MERGED_BRANCH=$(echo "$COMMIT_MSG" | sed -n "s/.*Merge branch '\([^']*\)'.*/\1/p")
+            fi
+            
+            # Another fallback pattern
+            if [[ -z "$MERGED_BRANCH" ]]; then
+              MERGED_BRANCH=$(echo "$COMMIT_MSG" | sed -n 's/.*from.*\/\([^[:space:]]*\).*/\1/p')
+            fi
+            
+            # Final fallback
+            if [[ -z "$MERGED_BRANCH" ]]; then
+              MERGED_BRANCH="feature-branch"
+            fi
+            
+            # Extract PR number if available
+            PR_NUMBER=$(echo "$COMMIT_MSG" | sed -n 's/.*Merge pull request #\([0-9]*\).*/\1/p')
+            
+          else
+            # Direct push (not a merge)
+            IS_MERGE="false"
+            MERGED_BRANCH=""
+            PR_NUMBER=""
+          fi
+          
+          # Set outputs
+          echo "commit_sha=${COMMIT_SHA}" >> $GITHUB_OUTPUT
+          echo "short_sha=${SHORT_SHA}" >> $GITHUB_OUTPUT
+          echo "commit_msg=${COMMIT_MSG}" >> $GITHUB_OUTPUT
+          echo "author_name=${AUTHOR_NAME}" >> $GITHUB_OUTPUT
+          echo "commit_url=${COMMIT_URL}" >> $GITHUB_OUTPUT
+          echo "repo_url=${REPO_URL}" >> $GITHUB_OUTPUT
+          echo "is_merge=${IS_MERGE}" >> $GITHUB_OUTPUT
+          echo "merged_branch=${MERGED_BRANCH}" >> $GITHUB_OUTPUT
+          echo "pr_number=${PR_NUMBER}" >> $GITHUB_OUTPUT
+
+      - name: Prepare Discord message
+        id: discord-prep
+        run: |
+          # Choose emoji and action based on merge status
+          if [[ "${{ steps.git-info.outputs.is_merge }}" == "true" ]]; then
+            EMOJI="🎉"
+            ACTION="merged to"
+          else
+            EMOJI="⚡"
+            ACTION="pushed to"
+          fi
+          
+          # Repository-specific colors and emojis
+          case "${{ inputs.repository_name }}" in
+            "api")
+              COLOR="3066993"      # Green
+              REPO_EMOJI="🔧"
+              ;;
+            "client")
+              COLOR="15844367"     # Gold/Orange  
+              REPO_EMOJI="📱"
+              ;;
+            "infra")
+              COLOR="10181046"     # Purple
+              REPO_EMOJI="⚙️"
+              ;;
+            *)
+              COLOR="5793266"      # Blue
+              REPO_EMOJI="📦"
+              ;;
+          esac
+          
+          # Build title
+          TITLE="${EMOJI} ${REPO_EMOJI} **${{ inputs.repository_name }}** ${ACTION} **${{ inputs.target_branch }}**!"
+          
+          # Build description
+          DESCRIPTION="**Repository:** [${{ inputs.repository_name }}](${{ steps.git-info.outputs.repo_url }})"
+          
+          # Add branch info for merges
+          if [[ "${{ steps.git-info.outputs.is_merge }}" == "true" ]]; then
+            BRANCH_NAME="${{ steps.git-info.outputs.merged_branch }}"
+            if [[ -n "${{ steps.git-info.outputs.pr_number }}" ]]; then
+              PR_URL="${{ steps.git-info.outputs.repo_url }}/pull/${{ steps.git-info.outputs.pr_number }}"
+              DESCRIPTION="${DESCRIPTION}\n🔀 **Merged Branch:** \`${BRANCH_NAME}\` ([#${{ steps.git-info.outputs.pr_number }}](${PR_URL}))"
+            else
+              DESCRIPTION="${DESCRIPTION}\n🔀 **Merged Branch:** \`${BRANCH_NAME}\`"
+            fi
+          fi
+          
+          DESCRIPTION="${DESCRIPTION}\n📝 **Commit:** [\`${{ steps.git-info.outputs.short_sha }}\`](${{ steps.git-info.outputs.commit_url }})"
+          
+          # Set outputs (escape newlines for JSON)
+          echo "emoji=${EMOJI}" >> $GITHUB_OUTPUT
+          echo "color=${COLOR}" >> $GITHUB_OUTPUT
+          echo "title=${TITLE}" >> $GITHUB_OUTPUT
+          echo "description<<EOF" >> $GITHUB_OUTPUT
+          echo "${DESCRIPTION}" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Send Discord notification
+        run: |
+          # Create timestamp
+          TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%S.000Z)
+          
+          # Clean commit message for JSON (escape quotes and limit length)
+          COMMIT_MSG_RAW='${{ steps.git-info.outputs.commit_msg }}'
+          COMMIT_MSG_CLEAN=$(echo "${COMMIT_MSG_RAW}" | sed 's/"/\\"/g' | head -c 200)
+          
+          # Escape description for JSON
+          DESCRIPTION_CLEAN='${{ steps.discord-prep.outputs.description }}'
+          DESCRIPTION_ESCAPED=$(echo "${DESCRIPTION_CLEAN}" | sed 's/"/\\"/g')
+          
+          # Create Discord payload
+          cat << 'EOF' > discord_payload.json
+          {
+            "embeds": [
+              {
+                "title": "${{ steps.discord-prep.outputs.title }}",
+                "description": "DESCRIPTION_PLACEHOLDER",
+                "color": ${{ steps.discord-prep.outputs.color }},
+                "fields": [
+                  {
+                    "name": "💬 Commit Message",
+                    "value": "```COMMIT_MSG_PLACEHOLDER```",
+                    "inline": false
+                  },
+                  {
+                    "name": "👤 Author",
+                    "value": "${{ steps.git-info.outputs.author_name }}",
+                    "inline": true
+                  },
+                  {
+                    "name": "🌿 Branch",
+                    "value": "${{ inputs.target_branch }}",
+                    "inline": true
+                  }
+                ],
+                "timestamp": "TIMESTAMP_PLACEHOLDER",
+                "footer": {
+                  "text": "GitHub Actions",
+                  "icon_url": "https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png"
+                }
+              }
+            ]
+          }
+          EOF
+          
+          # Replace placeholders
+          sed -i "s|DESCRIPTION_PLACEHOLDER|${DESCRIPTION_ESCAPED}|g" discord_payload.json
+          sed -i "s|COMMIT_MSG_PLACEHOLDER|${COMMIT_MSG_CLEAN}|g" discord_payload.json
+          sed -i "s|TIMESTAMP_PLACEHOLDER|${TIMESTAMP}|g" discord_payload.json
+          
+          # Send to Discord
+          HTTP_RESPONSE=$(curl -s -w "%{http_code}" \
+                              -H "Content-Type: application/json" \
+                              -d @discord_payload.json \
+                              "${{ secrets.DISCORD_WEBHOOK_URL }}")
+          
+          HTTP_CODE=${HTTP_RESPONSE: -3}
+          
+          if [[ $HTTP_CODE -ge 200 && $HTTP_CODE -lt 300 ]]; then
+            echo "✅ Discord notification sent successfully! (HTTP $HTTP_CODE)"
+          else
+            echo "❌ Failed to send Discord notification. HTTP Code: $HTTP_CODE"
+            echo "Response: ${HTTP_RESPONSE%???}"
+            exit 1
+          fi
