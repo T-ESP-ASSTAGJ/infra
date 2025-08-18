@@ -50,9 +50,7 @@ jobs:
                 --title "🚑 HOTFIX: $COMMIT_MSG" \
                 --body "🚨 CRITICAL HOTFIX 🚨 - Auto-created from critical commit in ${{ inputs.repository_name }}. This is a critical hotfix that requires immediate attention. Original commit: $COMMIT_MSG. Branch: $BRANCH. Repository: ${{ inputs.repository_name }}" \
                 --base staging \
-                --head "$BRANCH" \
-                --label "hotfix" \
-                --label "critical"
+                --head "$BRANCH"
               echo "✅ Critical PR created to staging"
             fi
             
@@ -62,9 +60,7 @@ jobs:
                 --title "🚑 CRITICAL HOTFIX: $COMMIT_MSG" \
                 --body "🚨 CRITICAL PRODUCTION HOTFIX 🚨 - Auto-created from critical commit in ${{ inputs.repository_name }}. This hotfix needs to be deployed to production immediately after validation. Original commit: $COMMIT_MSG. Branch: $BRANCH. Repository: ${{ inputs.repository_name }}" \
                 --base main \
-                --head "$BRANCH" \
-                --label "critical-hotfix" \
-                --label "production"
+                --head "$BRANCH"
               echo "✅ Critical PR created to main"
             fi
           
@@ -78,8 +74,7 @@ jobs:
                 --title "$COMMIT_MSG" \
                 --body "🤖 Auto-created from gitmoji commit in ${{ inputs.repository_name }}" \
                 --base staging \
-                --head "$BRANCH" \
-                --label "auto-deploy"
+                --head "$BRANCH"
               echo "✅ PR created to staging"
             else
               echo "ℹ️ PR already exists"
