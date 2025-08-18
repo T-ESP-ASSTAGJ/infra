@@ -62,6 +62,13 @@ jobs:
               -d "{\"transition\":{\"id\":\"$TRANSITION_ID\"}}" \
               "https://t-esp-asstagj.atlassian.net/rest/api/3/issue/$BRANCH/transitions"
             
+            # Add comment
+            curl -s -u "${{ secrets.JIRA_API_TOKEN }}" \
+              -H "Content-Type: application/json" \
+              -X POST \
+              -d "{\"body\":{\"content\":[{\"content\":[{\"text\":\"🤖 Auto-moved to $ACTION by GitHub (${{ inputs.repository_name }})\",\"type\":\"text\"}],\"type\":\"paragraph\"}],\"type\":\"doc\",\"version\":1}}" \
+              "https://t-esp-asstagj.atlassian.net/rest/api/3/issue/$BRANCH/comment"
+            
             echo "✅ $BRANCH moved to $ACTION"
           else
             echo "❌ Cannot transition to $ACTION"
