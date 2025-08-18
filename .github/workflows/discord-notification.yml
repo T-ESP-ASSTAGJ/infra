@@ -91,10 +91,10 @@ jobs:
           # Choose emoji and action based on merge status
           if [[ "${{ steps.git-info.outputs.is_merge }}" == "true" ]]; then
             EMOJI="🎉"
-            ACTION="merged to"
+            ACTION_TYPE="MERGE"
           else
             EMOJI="⚡"
-            ACTION="pushed to"
+            ACTION_TYPE="PUSH"
           fi
           
           # Repository-specific colors and emojis
@@ -117,24 +117,27 @@ jobs:
               ;;
           esac
           
-          # Build title
-          TITLE="${EMOJI} ${REPO_EMOJI} **${{ inputs.repository_name }}** ${ACTION} **${{ inputs.target_branch }}**!"
+          # Build clear title with repository and branch first
+          TITLE="${EMOJI} ${ACTION_TYPE} → ${REPO_EMOJI} **${{ inputs.repository_name }}** | **${{ inputs.target_branch }}**"
           
-          # Build description
-          DESCRIPTION="**Repository:** [${{ inputs.repository_name }}](${{ steps.git-info.outputs.repo_url }})"
+          # Build clear description with hierarchy: Where → What → Details
+          DESCRIPTION="## 📍 **Where:** [${{ inputs.repository_name }}](${{ steps.git-info.outputs.repo_url }}) repository"
+          DESCRIPTION="${DESCRIPTION}\n## 🌿 **Branch:** \`${{ inputs.target_branch }}\`"
           
-          # Add branch info for merges
+          # Add merge-specific info
           if [[ "${{ steps.git-info.outputs.is_merge }}" == "true" ]]; then
             BRANCH_NAME="${{ steps.git-info.outputs.merged_branch }}"
             if [[ -n "${{ steps.git-info.outputs.pr_number }}" ]]; then
               PR_URL="${{ steps.git-info.outputs.repo_url }}/pull/${{ steps.git-info.outputs.pr_number }}"
-              DESCRIPTION="${DESCRIPTION}\n🔀 **Merged Branch:** \`${BRANCH_NAME}\` ([#${{ steps.git-info.outputs.pr_number }}](${PR_URL}))"
+              DESCRIPTION="${DESCRIPTION}\n## 🔀 **Source:** \`${BRANCH_NAME}\` → [Pull Request #${{ steps.git-info.outputs.pr_number }}](${PR_URL})"
             else
-              DESCRIPTION="${DESCRIPTION}\n🔀 **Merged Branch:** \`${BRANCH_NAME}\`"
+              DESCRIPTION="${DESCRIPTION}\n## 🔀 **Source:** \`${BRANCH_NAME}\` branch merged"
             fi
+          else
+            DESCRIPTION="${DESCRIPTION}\n## ⚡ **Action:** Direct push to \`${{ inputs.target_branch }}\`"
           fi
           
-          DESCRIPTION="${DESCRIPTION}\n📝 **Commit:** [\`${{ steps.git-info.outputs.short_sha }}\`](${{ steps.git-info.outputs.commit_url }})"
+          DESCRIPTION="${DESCRIPTION}\n## 📝 **Commit:** [\`${{ steps.git-info.outputs.short_sha }}\`](${{ steps.git-info.outputs.commit_url }})"
           
           # Set outputs (escape newlines for JSON)
           echo "emoji=${EMOJI}" >> $GITHUB_OUTPUT
@@ -167,24 +170,29 @@ jobs:
                 "color": ${{ steps.discord-prep.outputs.color }},
                 "fields": [
                   {
-                    "name": "💬 Commit Message",
-                    "value": "```COMMIT_MSG_PLACEHOLDER```",
-                    "inline": false
-                  },
-                  {
                     "name": "👤 Author",
                     "value": "${{ steps.git-info.outputs.author_name }}",
                     "inline": true
                   },
                   {
-                    "name": "🌿 Branch",
-                    "value": "${{ inputs.target_branch }}",
+                    "name": "🕒 When",
+                    "value": "<t:UNIX_TIMESTAMP:R>",
                     "inline": true
+                  },
+                  {
+                    "name": "🔗 View Changes",
+                    "value": "[Commit ${{ steps.git-info.outputs.short_sha }}](${{ steps.git-info.outputs.commit_url }})",
+                    "inline": true
+                  },
+                  {
+                    "name": "💬 Commit Message",
+                    "value": "```COMMIT_MSG_PLACEHOLDER```",
+                    "inline": false
                   }
                 ],
                 "timestamp": "TIMESTAMP_PLACEHOLDER",
                 "footer": {
-                  "text": "GitHub Actions",
+                  "text": "GitHub Actions • ${{ inputs.repository_name }}",
                   "icon_url": "https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png"
                 }
               }
@@ -192,10 +200,14 @@ jobs:
           }
           EOF
           
+          # Get Unix timestamp for Discord relative time
+          UNIX_TIMESTAMP=$(date +%s)
+          
           # Replace placeholders
           sed -i "s|DESCRIPTION_PLACEHOLDER|${DESCRIPTION_ESCAPED}|g" discord_payload.json
           sed -i "s|COMMIT_MSG_PLACEHOLDER|${COMMIT_MSG_CLEAN}|g" discord_payload.json
           sed -i "s|TIMESTAMP_PLACEHOLDER|${TIMESTAMP}|g" discord_payload.json
+          sed -i "s|UNIX_TIMESTAMP|${UNIX_TIMESTAMP}|g" discord_payload.json
           
           # Send to Discord
           HTTP_RESPONSE=$(curl -s -w "%{http_code}" \
