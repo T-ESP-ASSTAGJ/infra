@@ -148,20 +148,23 @@ jobs:
           echo "EOF" >> $GITHUB_OUTPUT
 
       - name: Send Discord notification
+        env:
+          COMMIT_MSG: ${{ steps.git-info.outputs.commit_msg }}
+          DESCRIPTION: ${{ steps.discord-prep.outputs.description }}
+          DISCORD_TITLE: ${{ steps.discord-prep.outputs.title }}
+          DISCORD_COLOR: ${{ steps.discord-prep.outputs.color }}
         run: |
           # Create timestamp
           TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%S.000Z)
           UNIX_TIMESTAMP=$(date +%s)
           
-          # Clean commit message for JSON - properly escape all special characters
-          COMMIT_MSG_RAW="${{ steps.git-info.outputs.commit_msg }}"
-          COMMIT_MSG_CLEAN=$(printf '%s' "${COMMIT_MSG_RAW}" | sed 's/"/\\"/g' | sed "s/'/\\'/g" | head -c 150)
+          # Clean commit message for JSON - use env var to avoid shell interpretation
+          COMMIT_MSG_CLEAN=$(printf '%s' "${COMMIT_MSG}" | sed 's/"/\\"/g' | sed "s/'/\\'/g" | head -c 150)
           
           # Escape description for JSON
-          DESCRIPTION_RAW="${{ steps.discord-prep.outputs.description }}"
-          DESCRIPTION_ESCAPED=$(printf '%s' "${DESCRIPTION_RAW}" | sed 's/"/\\"/g' | sed ':a;N;$!ba;s/\n/\\n/g')
+          DESCRIPTION_ESCAPED=$(printf '%s' "${DESCRIPTION}" | sed 's/"/\\"/g' | sed ':a;N;$!ba;s/\n/\\n/g')
           
-          # Create Discord payload using printf to avoid shell interpretation
+          # Create Discord payload using environment variables
           cat > discord_payload.json << 'DISCORD_EOF'
           {
             "embeds": [
@@ -216,10 +219,10 @@ jobs:
           }
           DISCORD_EOF
           
-          # Replace placeholders safely
-          sed -i "s|TITLE_PLACEHOLDER|${{ steps.discord-prep.outputs.title }}|g" discord_payload.json
+          # Replace placeholders safely using environment variables
+          sed -i "s|TITLE_PLACEHOLDER|${DISCORD_TITLE}|g" discord_payload.json
           sed -i "s|DESCRIPTION_PLACEHOLDER|${DESCRIPTION_ESCAPED}|g" discord_payload.json
-          sed -i "s|COLOR_PLACEHOLDER|${{ steps.discord-prep.outputs.color }}|g" discord_payload.json
+          sed -i "s|COLOR_PLACEHOLDER|${DISCORD_COLOR}|g" discord_payload.json
           sed -i "s|REPO_NAME|${{ inputs.repository_name }}|g" discord_payload.json
           sed -i "s|REPO_URL|${{ steps.git-info.outputs.repo_url }}|g" discord_payload.json
           sed -i "s|TARGET_BRANCH|${{ inputs.target_branch }}|g" discord_payload.json
