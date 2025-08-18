@@ -121,7 +121,11 @@ jobs:
           esac
           
           # Build clean title
-          TITLE="${EMOJI} ${ACTION_DESC} to **${{ inputs.target_branch }}**"
+          if [[ "${{ steps.git-info.outputs.is_merge }}" == "true" ]]; then
+            TITLE="${EMOJI} OMG GET MERGED"
+          else
+            TITLE="${EMOJI} OMG GET PUSHED"
+          fi
           
           # Add merge info if it's a merge
           if [[ "${{ steps.git-info.outputs.is_merge }}" == "true" ]]; then
