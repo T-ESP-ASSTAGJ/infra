@@ -1,0 +1,127 @@
+name: 🎉 Discord Merge Notification
+
+on:
+  workflow_call:
+    inputs:
+      repository_name:
+        required: true
+        type: string
+      branch_merged:
+        required: false
+        type: string
+        default: "main"
+    secrets:
+      DISCORD_WEBHOOK_URL:
+        required: true
+
+jobs:
+  discord-notification:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get Merge Information
+        id: merge-info
+        run: |
+          # Get the latest commit info
+          COMMIT_SHA=$(git rev-parse HEAD)
+          COMMIT_MSG=$(git log -1 --format="%s")
+          AUTHOR_NAME=$(git log -1 --format="%an")
+          AUTHOR_EMAIL=$(git log -1 --format="%ae")
+          COMMIT_URL="https://github.com/${{ github.repository }}/commit/${COMMIT_SHA}"
+          
+          # Check if this is actually a merge commit
+          MERGE_COMMIT=$(git log -1 --merges --format="%H")
+          
+          if [[ -n "$MERGE_COMMIT" ]]; then
+            # This is a merge commit, get the branch that was merged
+            MERGED_BRANCH=$(git log -1 --format="%s" | sed -n 's/.*Merge pull request #[0-9]* from [^/]*\/\(.*\)/\1/p')
+            if [[ -z "$MERGED_BRANCH" ]]; then
+              # Fallback: try to extract branch from merge commit message
+              MERGED_BRANCH=$(git log -1 --format="%s" | sed -n 's/.*from.*\/\(.*\)$/\1/p')
+            fi
+            if [[ -z "$MERGED_BRANCH" ]]; then
+              MERGED_BRANCH="unknown-branch"
+            fi
+            IS_MERGE="true"
+          else
+            # Direct push to main
+            MERGED_BRANCH="direct-push"
+            IS_MERGE="false"
+          fi
+          
+          # Set outputs
+          echo "commit_sha=${COMMIT_SHA}" >> $GITHUB_OUTPUT
+          echo "commit_msg=${COMMIT_MSG}" >> $GITHUB_OUTPUT
+          echo "author_name=${AUTHOR_NAME}" >> $GITHUB_OUTPUT
+          echo "author_email=${AUTHOR_EMAIL}" >> $GITHUB_OUTPUT
+          echo "commit_url=${COMMIT_URL}" >> $GITHUB_OUTPUT
+          echo "merged_branch=${MERGED_BRANCH}" >> $GITHUB_OUTPUT
+          echo "is_merge=${IS_MERGE}" >> $GITHUB_OUTPUT
+          echo "short_sha=${COMMIT_SHA:0:7}" >> $GITHUB_OUTPUT
+
+      - name: Send Discord Notification
+        run: |
+          # Choose emoji and message based on commit type
+          if [[ "${{ steps.merge-info.outputs.is_merge }}" == "true" ]]; then
+            EMOJI="🎉"
+            ACTION="merged"
+            BRANCH_TEXT="**Branch:** \`${{ steps.merge-info.outputs.merged_branch }}\`"
+          else
+            EMOJI="⚡"
+            ACTION="pushed to"
+            BRANCH_TEXT=""
+          fi
+          
+          # Determine color based on repository
+          case "${{ inputs.repository_name }}" in
+            "api") COLOR="3066993" ;;      # Green
+            "client") COLOR="15844367" ;;  # Gold  
+            "infra") COLOR="10181046" ;;   # Purple
+            *) COLOR="5793266" ;;          # Blue
+          esac
+          
+          # Create Discord embed
+          cat << EOF > discord_payload.json
+          {
+            "embeds": [
+              {
+                "title": "${EMOJI} Code ${ACTION} ${{ inputs.branch_merged }}!",
+                "description": "**Repository:** ${{ inputs.repository_name }}\n${BRANCH_TEXT}\n**Commit:** [\`${{ steps.merge-info.outputs.short_sha }}\`](${{ steps.merge-info.outputs.commit_url }})",
+                "color": ${COLOR},
+                "fields": [
+                  {
+                    "name": "💬 Message",
+                    "value": "\`\`\`${{ steps.merge-info.outputs.commit_msg }}\`\`\`",
+                    "inline": false
+                  },
+                  {
+                    "name": "👤 Author",
+                    "value": "${{ steps.merge-info.outputs.author_name }}",
+                    "inline": true
+                  },
+                  {
+                    "name": "📂 Repository",
+                    "value": "[${{ inputs.repository_name }}](https://github.com/${{ github.repository }})",
+                    "inline": true
+                  }
+                ],
+                "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%S.000Z)",
+                "footer": {
+                  "text": "GitHub Actions",
+                  "icon_url": "https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png"
+                }
+              }
+            ]
+          }
+          EOF
+          
+          # Send to Discord
+          curl -H "Content-Type: application/json" \
+               -d @discord_payload.json \
+               "${{ secrets.DISCORD_WEBHOOK_URL }}"
+          
+          echo "✅ Discord notification sent successfully!"
