@@ -38,7 +38,7 @@ jobs:
           ACTION=""
           if [[ "$COMMIT_MSG" =~ 🚑 ]]; then
             ACTION="Ready for Deploy"
-          elif [[ "$COMMIT_MSG" =~ (✨|🐛|🚀|♻️|🎨) ]]; then
+          elif [[ "$COMMIT_MSG" =~ (✨|:sparkles:|🐛|:bug:|🚀|:rocket:|♻️|:recycle:|🎨|:art:) ]]; then
             ACTION="In Review"
           else
             echo "No actionable gitmoji found"
