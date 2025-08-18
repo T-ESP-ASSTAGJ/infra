@@ -1,0 +1,68 @@
+# infra/.github/workflows/jira-gitmoji-integration.yml
+name: 🎯 Jira Gitmoji Integration
+
+on:
+  workflow_call:
+    inputs:
+      repository_name:
+        required: true
+        type: string
+    secrets:
+      JIRA_API_TOKEN:
+        required: true
+
+jobs:
+  jira-integration:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Process Gitmoji
+        run: |
+          BRANCH=${GITHUB_REF#refs/heads/}
+          
+          # Skip if not TEM branch
+          if [[ ! "$BRANCH" =~ ^TEM-[0-9]+$ ]]; then
+            echo "Skipping: $BRANCH is not a TEM-XXX branch"
+            exit 0
+          fi
+          
+          # Get commit message
+          COMMIT_MSG=$(git log -1 --format="%s")
+          echo "Commit: $COMMIT_MSG"
+          
+          # Map gitmoji to action
+          ACTION=""
+          if [[ "$COMMIT_MSG" =~ 🚑 ]]; then
+            ACTION="Ready for Deploy"
+          elif [[ "$COMMIT_MSG" =~ (✨|🐛|🚀|♻️|🎨) ]]; then
+            ACTION="In Review"
+          else
+            echo "No actionable gitmoji found"
+            exit 0
+          fi
+          
+          echo "Moving $BRANCH to $ACTION"
+          
+          # Get transitions
+          TRANSITIONS=$(curl -s -u "${{ secrets.JIRA_API_TOKEN }}" \
+            "https://t-esp-asstagj.atlassian.net/rest/api/3/issue/$BRANCH/transitions")
+          
+          # Find transition ID
+          TRANSITION_ID=$(echo "$TRANSITIONS" | jq -r ".transitions[] | select(.to.name == \"$ACTION\") | .id")
+          
+          if [[ -n "$TRANSITION_ID" && "$TRANSITION_ID" != "null" ]]; then
+            # Do transition
+            curl -s -u "${{ secrets.JIRA_API_TOKEN }}" \
+              -H "Content-Type: application/json" \
+              -X POST \
+              -d "{\"transition\":{\"id\":\"$TRANSITION_ID\"}}" \
+              "https://t-esp-asstagj.atlassian.net/rest/api/3/issue/$BRANCH/transitions"
+            
+            echo "✅ $BRANCH moved to $ACTION"
+          else
+            echo "❌ Cannot transition to $ACTION"
+          fi
