@@ -148,90 +148,76 @@ jobs:
           echo "EOF" >> $GITHUB_OUTPUT
 
       - name: Send Discord notification
-        env:
-          COMMIT_MSG: ${{ steps.git-info.outputs.commit_msg }}
-          DESCRIPTION: ${{ steps.discord-prep.outputs.description }}
-          DISCORD_TITLE: ${{ steps.discord-prep.outputs.title }}
-          DISCORD_COLOR: ${{ steps.discord-prep.outputs.color }}
         run: |
           # Create timestamp
           TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%S.000Z)
           UNIX_TIMESTAMP=$(date +%s)
           
-          # Clean commit message for JSON - use env var to avoid shell interpretation
-          COMMIT_MSG_CLEAN=$(printf '%s' "${COMMIT_MSG}" | sed 's/"/\\"/g' | sed "s/'/\\'/g" | head -c 150)
-          
-          # Escape description for JSON
-          DESCRIPTION_ESCAPED=$(printf '%s' "${DESCRIPTION}" | sed 's/"/\\"/g' | sed ':a;N;$!ba;s/\n/\\n/g')
-          
-          # Create Discord payload using environment variables
-          cat > discord_payload.json << 'DISCORD_EOF'
-          {
-            "embeds": [
-              {
-                "title": "TITLE_PLACEHOLDER",
-                "description": "DESCRIPTION_PLACEHOLDER",
-                "color": COLOR_PLACEHOLDER,
-                "fields": [
-                  {
-                    "name": "📦 Repository",
-                    "value": "[REPO_NAME](REPO_URL)",
-                    "inline": true
-                  },
-                  {
-                    "name": "🌿 Branch",
-                    "value": "`TARGET_BRANCH`",
-                    "inline": true
-                  },
-                  {
-                    "name": "👤 Author",
-                    "value": "AUTHOR_NAME",
-                    "inline": true
-                  },
-                  {
-                    "name": "📝 Commit",
-                    "value": "[`SHORT_SHA`](COMMIT_URL)",
-                    "inline": true
-                  },
-                  {
-                    "name": "🕒 Time",
-                    "value": "<t:UNIX_TIMESTAMP:R>",
-                    "inline": true
-                  },
-                  {
-                    "name": "🔗 Actions",
-                    "value": "[View Commit](COMMIT_URL) • [View Repo](REPO_URL)",
-                    "inline": true
-                  },
-                  {
-                    "name": "💬 Message",
-                    "value": "COMMIT_MSG_PLACEHOLDER",
-                    "inline": false
+          # Use jq to safely build JSON without shell interpretation issues
+          jq -n \
+            --arg title "${{ steps.discord-prep.outputs.title }}" \
+            --arg description "${{ steps.discord-prep.outputs.description }}" \
+            --argjson color "${{ steps.discord-prep.outputs.color }}" \
+            --arg repo_name "${{ inputs.repository_name }}" \
+            --arg repo_url "${{ steps.git-info.outputs.repo_url }}" \
+            --arg target_branch "${{ inputs.target_branch }}" \
+            --arg author_name "${{ steps.git-info.outputs.author_name }}" \
+            --arg short_sha "${{ steps.git-info.outputs.short_sha }}" \
+            --arg commit_url "${{ steps.git-info.outputs.commit_url }}" \
+            --arg commit_msg "${{ steps.git-info.outputs.commit_msg }}" \
+            --arg timestamp "${TIMESTAMP}" \
+            --argjson unix_timestamp "${UNIX_TIMESTAMP}" \
+            '{
+              "embeds": [
+                {
+                  "title": $title,
+                  "description": $description,
+                  "color": $color,
+                  "fields": [
+                    {
+                      "name": "📦 Repository",
+                      "value": "[\($repo_name)](\($repo_url))",
+                      "inline": true
+                    },
+                    {
+                      "name": "🌿 Branch",
+                      "value": "`\($target_branch)`",
+                      "inline": true
+                    },
+                    {
+                      "name": "👤 Author",
+                      "value": $author_name,
+                      "inline": true
+                    },
+                    {
+                      "name": "📝 Commit",
+                      "value": "[`\($short_sha)`](\($commit_url))",
+                      "inline": true
+                    },
+                    {
+                      "name": "🕒 Time",
+                      "value": "<t:\($unix_timestamp):R>",
+                      "inline": true
+                    },
+                    {
+                      "name": "🔗 Actions",
+                      "value": "[View Commit](\($commit_url)) • [View Repo](\($repo_url))",
+                      "inline": true
+                    },
+                    {
+                      "name": "💬 Message",
+                      "value": ($commit_msg | if length > 150 then .[0:150] + "..." else . end),
+                      "inline": false
+                    }
+                  ],
+                  "timestamp": $timestamp,
+                  "footer": {
+                    "text": "\($repo_name) • GitHub Actions",
+                    "icon_url": "https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png"
                   }
-                ],
-                "timestamp": "TIMESTAMP_PLACEHOLDER",
-                "footer": {
-                  "text": "REPO_NAME • GitHub Actions",
-                  "icon_url": "https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png"
                 }
-              }
-            ]
-          }
-          DISCORD_EOF
-          
-          # Replace placeholders safely using environment variables
-          sed -i "s|TITLE_PLACEHOLDER|${DISCORD_TITLE}|g" discord_payload.json
-          sed -i "s|DESCRIPTION_PLACEHOLDER|${DESCRIPTION_ESCAPED}|g" discord_payload.json
-          sed -i "s|COLOR_PLACEHOLDER|${DISCORD_COLOR}|g" discord_payload.json
-          sed -i "s|REPO_NAME|${{ inputs.repository_name }}|g" discord_payload.json
-          sed -i "s|REPO_URL|${{ steps.git-info.outputs.repo_url }}|g" discord_payload.json
-          sed -i "s|TARGET_BRANCH|${{ inputs.target_branch }}|g" discord_payload.json
-          sed -i "s|AUTHOR_NAME|${{ steps.git-info.outputs.author_name }}|g" discord_payload.json
-          sed -i "s|SHORT_SHA|${{ steps.git-info.outputs.short_sha }}|g" discord_payload.json
-          sed -i "s|COMMIT_URL|${{ steps.git-info.outputs.commit_url }}|g" discord_payload.json
-          sed -i "s|UNIX_TIMESTAMP|${UNIX_TIMESTAMP}|g" discord_payload.json
-          sed -i "s|TIMESTAMP_PLACEHOLDER|${TIMESTAMP}|g" discord_payload.json
-          sed -i "s|COMMIT_MSG_PLACEHOLDER|${COMMIT_MSG_CLEAN}|g" discord_payload.json
+              ]
+            }' > discord_payload.json
           
           # Send to Discord
           HTTP_RESPONSE=$(curl -s -w "%{http_code}" \
