@@ -16,19 +16,42 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Check for open pull requests
+      - name: Check for open pull requests across all repos
         id: check-prs
         run: |
-          # Get open PRs using GitHub CLI
-          OPEN_PRS=$(gh pr list --repo ${{ github.repository }} --json number,title,author,createdAt,url,headRefName --limit 20)
-          PR_COUNT=$(echo "$OPEN_PRS" | jq '. | length')
+          # List of repositories to check
+          REPOS=("T-ESP-ASSTAGJ/api" "T-ESP-ASSTAGJ/client" "T-ESP-ASSTAGJ/infra")
           
-          echo "pr_count=${PR_COUNT}" >> $GITHUB_OUTPUT
+          # Initialize combined PR list
+          echo "[]" > combined_prs.json
+          TOTAL_PR_COUNT=0
           
-          # Save PR data to file for next step
-          echo "$OPEN_PRS" > open_prs.json
+          # Check each repository
+          for repo in "${REPOS[@]}"; do
+            echo "Checking repository: $repo"
           
-          echo "Found ${PR_COUNT} open pull requests"
+            # Get PRs for this repo
+            REPO_PRS=$(gh pr list --repo "$repo" --json number,title,author,createdAt,url,headRefName,repository --limit 20)
+            REPO_PR_COUNT=$(echo "$REPO_PRS" | jq '. | length')
+          
+            echo "Found ${REPO_PR_COUNT} PRs in $repo"
+          
+            # Add repository info to each PR
+            REPO_PRS_WITH_INFO=$(echo "$REPO_PRS" | jq --arg repo "$repo" 'map(. + {repository: $repo})')
+          
+            # Combine with existing PRs
+            combined_prs=$(jq -s '.[0] + .[1]' combined_prs.json <(echo "$REPO_PRS_WITH_INFO"))
+            echo "$combined_prs" > combined_prs.json
+          
+            TOTAL_PR_COUNT=$((TOTAL_PR_COUNT + REPO_PR_COUNT))
+          done
+          
+          echo "pr_count=${TOTAL_PR_COUNT}" >> $GITHUB_OUTPUT
+          
+          # Save combined PR data
+          cp combined_prs.json open_prs.json
+          
+          echo "Found ${TOTAL_PR_COUNT} total open pull requests across all repositories"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -37,8 +60,9 @@ jobs:
         if: steps.check-prs.outputs.pr_count > 0
         run: |
           PR_COUNT=${{ steps.check-prs.outputs.pr_count }}
-          REPO_NAME="${{ github.repository }}"
-          REPO_URL="https://github.com/${{ github.repository }}"
+          # Repository name for display (all repos)
+          REPO_NAME="All Repositories"
+          REPO_URL="https://github.com/T-ESP-ASSTAGJ"
           
           # Repository-specific colors and emojis (matching your existing style)
           case "$(basename ${{ github.repository }})" in
@@ -67,8 +91,8 @@ jobs:
             TITLE="📋 ${PR_COUNT} Pull Requests Need Attention!"
           fi
           
-          # Create PR list for description
-          PR_LIST=$(jq -r '.[] | "• **[\(.title)](\(.url))** by \(.author.login) (\(.headRefName))"' open_prs.json | head -10)
+          # Create PR list for description with repository names
+          PR_LIST=$(jq -r '.[] | "• **[\(.title)](\(.url))** by \(.author.login) (\(.headRefName)) - `\(.repository | split("/")[1])`"' open_prs.json | head -10)
           
           # If more than 10 PRs, add a note
           if [[ $PR_COUNT -gt 10 ]]; then
