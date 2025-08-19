@@ -31,7 +31,7 @@ jobs:
             echo "Checking repository: $repo"
           
             # Get PRs for this repo
-            REPO_PRS=$(gh pr list --repo "$repo" --json number,title,author,createdAt,url,headRefName,repository --limit 20)
+            REPO_PRS=$(gh pr list --repo "$repo" --json number,title,author,createdAt,url,headRefName --limit 20)
             REPO_PR_COUNT=$(echo "$REPO_PRS" | jq '. | length')
           
             echo "Found ${REPO_PR_COUNT} PRs in $repo"
@@ -64,25 +64,9 @@ jobs:
           REPO_NAME="All Repositories"
           REPO_URL="https://github.com/T-ESP-ASSTAGJ"
           
-          # Repository-specific colors and emojis (matching your existing style)
-          case "$(basename ${{ github.repository }})" in
-            "*api*")
-              COLOR="3066993"      # Green
-              REPO_EMOJI="🔧"
-              ;;
-            "*client*")
-              COLOR="15844367"     # Gold/Orange  
-              REPO_EMOJI="📱"
-              ;;
-            "*infra*")
-              COLOR="10181046"     # Purple
-              REPO_EMOJI="⚙️"
-              ;;
-            *)
-              COLOR="5793266"      # Blue
-              REPO_EMOJI="📦"
-              ;;
-          esac
+          # Use a mixed color for all repositories
+          COLOR="5793266"      # Blue for combined view
+          REPO_EMOJI="📦"
           
           # Build title based on PR count
           if [[ $PR_COUNT -eq 1 ]]; then
