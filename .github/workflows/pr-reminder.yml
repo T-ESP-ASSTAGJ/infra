@@ -1,0 +1,166 @@
+name: 📋 PR Reminder Bot
+
+on:
+  schedule:
+    # Run Monday-Friday at 2:00 PM UTC (14h)
+    - cron: '0 14 * * 1-5'
+
+  # Allow manual triggering for testing
+  workflow_dispatch:
+
+jobs:
+  check-open-prs:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Check for open pull requests
+        id: check-prs
+        run: |
+          # Get open PRs using GitHub CLI
+          OPEN_PRS=$(gh pr list --repo ${{ github.repository }} --json number,title,author,createdAt,url,headRefName --limit 20)
+          PR_COUNT=$(echo "$OPEN_PRS" | jq '. | length')
+          
+          echo "pr_count=${PR_COUNT}" >> $GITHUB_OUTPUT
+          
+          # Save PR data to file for next step
+          echo "$OPEN_PRS" > open_prs.json
+          
+          echo "Found ${PR_COUNT} open pull requests"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Prepare Discord message
+        id: discord-prep
+        if: steps.check-prs.outputs.pr_count > 0
+        run: |
+          PR_COUNT=${{ steps.check-prs.outputs.pr_count }}
+          REPO_NAME="${{ github.repository }}"
+          REPO_URL="https://github.com/${{ github.repository }}"
+          
+          # Repository-specific colors and emojis (matching your existing style)
+          case "$(basename ${{ github.repository }})" in
+            "*api*")
+              COLOR="3066993"      # Green
+              REPO_EMOJI="🔧"
+              ;;
+            "*client*")
+              COLOR="15844367"     # Gold/Orange  
+              REPO_EMOJI="📱"
+              ;;
+            "*infra*")
+              COLOR="10181046"     # Purple
+              REPO_EMOJI="⚙️"
+              ;;
+            *)
+              COLOR="5793266"      # Blue
+              REPO_EMOJI="📦"
+              ;;
+          esac
+          
+          # Build title based on PR count
+          if [[ $PR_COUNT -eq 1 ]]; then
+            TITLE="📋 1 Pull Request Needs Attention!"
+          else
+            TITLE="📋 ${PR_COUNT} Pull Requests Need Attention!"
+          fi
+          
+          # Create PR list for description
+          PR_LIST=$(jq -r '.[] | "• **[\(.title)](\(.url))** by \(.author.login) (\(.headRefName))"' open_prs.json | head -10)
+          
+          # If more than 10 PRs, add a note
+          if [[ $PR_COUNT -gt 10 ]]; then
+            PR_LIST="${PR_LIST}\n• ... and $((PR_COUNT - 10)) more"
+          fi
+          
+          # Set outputs
+          echo "color=${COLOR}" >> $GITHUB_OUTPUT
+          echo "title=${TITLE}" >> $GITHUB_OUTPUT
+          echo "repo_emoji=${REPO_EMOJI}" >> $GITHUB_OUTPUT
+          echo "pr_list<<EOF" >> $GITHUB_OUTPUT
+          echo -e "${PR_LIST}" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Send Discord reminder
+        if: steps.check-prs.outputs.pr_count > 0
+        run: |
+          # Create timestamp
+          TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%S.000Z)
+          UNIX_TIMESTAMP=$(date +%s)
+          
+          # Get oldest PR for additional info
+          OLDEST_PR=$(jq -r 'sort_by(.createdAt) | .[0]' open_prs.json)
+          OLDEST_DAYS=$(( ($(date +%s) - $(date -d "$(echo "$OLDEST_PR" | jq -r '.createdAt')" +%s)) / 86400 ))
+          
+          # Build Discord payload using jq
+          jq -n \
+            --arg title "${{ steps.discord-prep.outputs.title }}" \
+            --arg pr_list "${{ steps.discord-prep.outputs.pr_list }}" \
+            --argjson color "${{ steps.discord-prep.outputs.color }}" \
+            --arg repo_name "$(basename ${{ github.repository }})" \
+            --arg repo_url "https://github.com/${{ github.repository }}" \
+            --arg pr_count "${{ steps.check-prs.outputs.pr_count }}" \
+            --arg oldest_days "${OLDEST_DAYS}" \
+            --arg timestamp "${TIMESTAMP}" \
+            --argjson unix_timestamp "${UNIX_TIMESTAMP}" \
+            '{
+              "embeds": [
+                {
+                  "title": $title,
+                  "description": $pr_list,
+                  "color": $color,
+                  "fields": [
+                    {
+                      "name": "📦 Repository",
+                      "value": "[\($repo_name)](\($repo_url))",
+                      "inline": true
+                    },
+                    {
+                      "name": "📊 Total PRs",
+                      "value": $pr_count,
+                      "inline": true
+                    },
+                    {
+                      "name": "⏰ Oldest PR",
+                      "value": "\($oldest_days) days old",
+                      "inline": true
+                    },
+                    {
+                      "name": "🔗 Quick Actions",
+                      "value": "[View All PRs](\($repo_url)/pulls) • [Create New PR](\($repo_url)/compare)",
+                      "inline": false
+                    }
+                  ],
+                  "timestamp": $timestamp,
+                  "footer": {
+                    "text": "\($repo_name) • PR Reminder Bot 🔔",
+                    "icon_url": "https://cdn.discordapp.com/embed/avatars/0.png"
+                  }
+                }
+              ]
+            }' > discord_payload.json
+          
+          # Send to Discord using the PR reminder webhook
+          HTTP_RESPONSE=$(curl -s -w "%{http_code}" \
+                              -H "Content-Type: application/json" \
+                              -d @discord_payload.json \
+                              "${{ secrets.PR_REMINDER_WEBHOOK_URL }}")
+          
+          HTTP_CODE=${HTTP_RESPONSE: -3}
+          
+          if [[ $HTTP_CODE -ge 200 && $HTTP_CODE -lt 300 ]]; then
+            echo "✅ PR reminder sent successfully! (HTTP $HTTP_CODE)"
+          else
+            echo "❌ Failed to send PR reminder. HTTP Code: $HTTP_CODE"
+            echo "Response: ${HTTP_RESPONSE%???}"
+            exit 1
+          fi
+        env:
+          PR_REMINDER_WEBHOOK_URL: ${{ secrets.PR_REMINDER_WEBHOOK_URL }}
+
+      - name: No PRs message
+        if: steps.check-prs.outputs.pr_count == 0
+        run: |
+          echo "🎉 No open pull requests found! Great job keeping up with reviews."
