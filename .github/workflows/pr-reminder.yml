@@ -108,7 +108,7 @@ jobs:
             --arg oldest_days "${OLDEST_DAYS}" \
             --arg timestamp "${TIMESTAMP}" \
             --argjson unix_timestamp "${UNIX_TIMESTAMP}" \
-            --arg role_mention "<@&API>" \
+            --arg role_mention "<@&1407006925098582088>" \
             '{
               "content": $role_mention,
               "embeds": [
@@ -200,7 +200,7 @@ jobs:
             --arg oldest_days "${OLDEST_DAYS}" \
             --arg timestamp "${TIMESTAMP}" \
             --argjson unix_timestamp "${UNIX_TIMESTAMP}" \
-            --arg role_mention "<@&Client>" \
+            --arg role_mention "<@&1407007204501885039>" \
             '{
               "content": $role_mention,
               "embeds": [
@@ -292,7 +292,7 @@ jobs:
             --arg oldest_days "${OLDEST_DAYS}" \
             --arg timestamp "${TIMESTAMP}" \
             --argjson unix_timestamp "${UNIX_TIMESTAMP}" \
-            --arg role_mention "<@&Infra>" \
+            --arg role_mention "<@&1409445408807194634>" \
             '{
               "content": $role_mention,
               "embeds": [
