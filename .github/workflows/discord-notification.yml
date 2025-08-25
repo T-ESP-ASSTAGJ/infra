@@ -16,11 +16,20 @@ on:
       DISCORD_WEBHOOK_URL:
         required: true
         description: "Discord webhook URL for notifications"
+      PR_BACK_REMINDER_WEBHOOK_URL:
+        required: true
+        description: "Discord webhook URL for API notifications"
+      PR_FRONT_REMINDER_WEBHOOK_URL:
+        required: true
+        description: "Discord webhook URL for Client notifications"
+      PR_DEVOPS_REMINDER_WEBHOOK_URL:
+        required: true
+        description: "Discord webhook URL for Infra notifications"
 
 jobs:
   discord-notification:
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -44,29 +53,29 @@ jobs:
           if [[ $PARENT_COUNT -gt 1 ]]; then
             # This is a merge commit
             IS_MERGE="true"
-            
+          
             # Try to extract branch name from merge commit message
             # Pattern: "Merge pull request #123 from user/branch-name"
             MERGED_BRANCH=$(echo "$COMMIT_MSG" | sed -n 's/.*Merge pull request #[0-9]* from [^/]*\/\(.*\)/\1/p')
-            
+          
             # Alternative pattern: "Merge branch 'branch-name'"
             if [[ -z "$MERGED_BRANCH" ]]; then
               MERGED_BRANCH=$(echo "$COMMIT_MSG" | sed -n "s/.*Merge branch '\([^']*\)'.*/\1/p")
             fi
-            
+          
             # Another fallback pattern
             if [[ -z "$MERGED_BRANCH" ]]; then
               MERGED_BRANCH=$(echo "$COMMIT_MSG" | sed -n 's/.*from.*\/\([^[:space:]]*\).*/\1/p')
             fi
-            
+          
             # Final fallback
             if [[ -z "$MERGED_BRANCH" ]]; then
               MERGED_BRANCH="feature-branch"
             fi
-            
+          
             # Extract PR number if available
             PR_NUMBER=$(echo "$COMMIT_MSG" | sed -n 's/.*Merge pull request #\([0-9]*\).*/\1/p')
-            
+          
           else
             # Direct push (not a merge)
             IS_MERGE="false"
@@ -257,5 +266,4 @@ jobs:
             echo "❌ Failed to send Discord notification. HTTP Code: $HTTP_CODE"
             echo "Response: ${HTTP_RESPONSE%???}"
             exit 1
-          fi
           fi
