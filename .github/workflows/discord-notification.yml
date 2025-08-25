@@ -166,15 +166,15 @@ jobs:
           case "${{ inputs.repository_name }}" in
             "api")
               WEBHOOK_URL="${{ secrets.PR_BACK_REMINDER_WEBHOOK_URL }}"
-              ROLE_MENTION="<@&API>"
+              ROLE_MENTION="<@&1407006925098582088>"
               ;;
             "client")
               WEBHOOK_URL="${{ secrets.PR_FRONT_REMINDER_WEBHOOK_URL }}"
-              ROLE_MENTION="<@&Client>"
+              ROLE_MENTION="<@&1407007204501885039>"
               ;;
             "infra")
               WEBHOOK_URL="${{ secrets.PR_DEVOPS_REMINDER_WEBHOOK_URL }}"
-              ROLE_MENTION="<@&Infra>"
+              ROLE_MENTION="<@&1409445408807194634>"
               ;;
             *)
               WEBHOOK_URL="${{ secrets.DISCORD_WEBHOOK_URL }}"
