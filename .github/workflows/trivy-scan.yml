@@ -23,6 +23,10 @@ on:
         required: false
         type: string
         description: 'Discord webhook URL for alerts'
+    secrets:
+      DISCORD_WEBHOOK_URL:
+        required: false
+        description: 'Discord webhook URL for alerts'
     outputs:
       scan_results:
         description: 'Summary of scan results'
