@@ -22,8 +22,14 @@ jobs:
           # List of repositories to check
           REPOS=("T-ESP-ASSTAGJ/api" "T-ESP-ASSTAGJ/client" "T-ESP-ASSTAGJ/infra")
           
-          # Initialize combined PR list
-          echo "[]" > combined_prs.json
+          # Initialize separate PR lists for each repo
+          echo "[]" > api_prs.json
+          echo "[]" > client_prs.json
+          echo "[]" > infra_prs.json
+          
+          API_PR_COUNT=0
+          CLIENT_PR_COUNT=0
+          INFRA_PR_COUNT=0
           TOTAL_PR_COUNT=0
           
           # Check each repository
@@ -36,84 +42,86 @@ jobs:
           
             echo "Found ${REPO_PR_COUNT} PRs in $repo"
           
-            # Add repository info to each PR
-            REPO_PRS_WITH_INFO=$(echo "$REPO_PRS" | jq --arg repo "$repo" 'map(. + {repository: $repo})')
-          
-            # Combine with existing PRs
-            combined_prs=$(jq -s '.[0] + .[1]' combined_prs.json <(echo "$REPO_PRS_WITH_INFO"))
-            echo "$combined_prs" > combined_prs.json
+            # Add repository info to each PR and save to appropriate file
+            case "$repo" in
+              "T-ESP-ASSTAGJ/api")
+                echo "$REPO_PRS" | jq --arg repo "$repo" 'map(. + {repository: $repo})' > api_prs.json
+                API_PR_COUNT=$REPO_PR_COUNT
+                ;;
+              "T-ESP-ASSTAGJ/client")
+                echo "$REPO_PRS" | jq --arg repo "$repo" 'map(. + {repository: $repo})' > client_prs.json
+                CLIENT_PR_COUNT=$REPO_PR_COUNT
+                ;;
+              "T-ESP-ASSTAGJ/infra")
+                echo "$REPO_PRS" | jq --arg repo "$repo" 'map(. + {repository: $repo})' > infra_prs.json
+                INFRA_PR_COUNT=$REPO_PR_COUNT
+                ;;
+            esac
           
             TOTAL_PR_COUNT=$((TOTAL_PR_COUNT + REPO_PR_COUNT))
           done
           
-          echo "pr_count=${TOTAL_PR_COUNT}" >> $GITHUB_OUTPUT
-          
-          # Save combined PR data
-          cp combined_prs.json open_prs.json
+          # Set outputs for each repo
+          echo "api_pr_count=${API_PR_COUNT}" >> $GITHUB_OUTPUT
+          echo "client_pr_count=${CLIENT_PR_COUNT}" >> $GITHUB_OUTPUT
+          echo "infra_pr_count=${INFRA_PR_COUNT}" >> $GITHUB_OUTPUT
+          echo "total_pr_count=${TOTAL_PR_COUNT}" >> $GITHUB_OUTPUT
           
           echo "Found ${TOTAL_PR_COUNT} total open pull requests across all repositories"
+          echo "API: ${API_PR_COUNT}, Client: ${CLIENT_PR_COUNT}, Infra: ${INFRA_PR_COUNT}"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Prepare Discord message
-        id: discord-prep
-        if: steps.check-prs.outputs.pr_count > 0
+      - name: Send API notifications
+        if: steps.check-prs.outputs.api_pr_count > 0
         run: |
-          PR_COUNT=${{ steps.check-prs.outputs.pr_count }}
+          # Create timestamp
+          TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%S.000Z)
+          UNIX_TIMESTAMP=$(date +%s)
           
-          # Use mixed color for all repositories combined
-          COLOR="5793266"      # Blue for combined view
+          PR_COUNT=${{ steps.check-prs.outputs.api_pr_count }}
           
           # Build title based on PR count
           if [[ $PR_COUNT -eq 1 ]]; then
-            TITLE="📋 1 Pull Request Needs Attention!"
+            TITLE="📋 1 API Pull Request Needs Attention!"
           else
-            TITLE="📋 ${PR_COUNT} Pull Requests Need Attention!"
+            TITLE="📋 ${PR_COUNT} API Pull Requests Need Attention!"
           fi
           
-          # Create PR list for description with repository names
-          PR_LIST=$(jq -r '.[] | "• **[\(.repository | split("/")[1])](https://github.com/\(.repository))** - **[\(.title)](\(.url))** by \(.author.login) (\(.headRefName))"' open_prs.json | head -10)
+          # Create PR list for API
+          PR_LIST=$(jq -r '.[] | "• **[\(.title)](\(.url))**\n  by \(.author.login) on `\(.headRefName)`\n"' api_prs.json | head -10)
           
           # If more than 10 PRs, add a note
           if [[ $PR_COUNT -gt 10 ]]; then
             PR_LIST="${PR_LIST}\n• ... and $((PR_COUNT - 10)) more"
           fi
           
-          # Set outputs
-          echo "color=${COLOR}" >> $GITHUB_OUTPUT
-          echo "title=${TITLE}" >> $GITHUB_OUTPUT
-          echo "pr_list<<EOF" >> $GITHUB_OUTPUT
-          echo -e "${PR_LIST}" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
-
-      - name: Send Discord reminder
-        if: steps.check-prs.outputs.pr_count > 0
-        run: |
-          # Create timestamp
-          TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%S.000Z)
-          UNIX_TIMESTAMP=$(date +%s)
-          
           # Get oldest PR for additional info
-          OLDEST_PR=$(jq -r 'sort_by(.createdAt) | .[0]' open_prs.json)
+          OLDEST_PR=$(jq -r 'sort_by(.createdAt) | .[0]' api_prs.json)
           OLDEST_DAYS=$(( ($(date +%s) - $(date -d "$(echo "$OLDEST_PR" | jq -r '.createdAt')" +%s)) / 86400 ))
           
           # Build Discord payload using jq
           jq -n \
-            --arg title "${{ steps.discord-prep.outputs.title }}" \
-            --arg pr_list "${{ steps.discord-prep.outputs.pr_list }}" \
-            --argjson color "${{ steps.discord-prep.outputs.color }}" \
-            --arg pr_count "${{ steps.check-prs.outputs.pr_count }}" \
+            --arg title "${TITLE}" \
+            --arg pr_list "${PR_LIST}" \
+            --arg pr_count "${PR_COUNT}" \
             --arg oldest_days "${OLDEST_DAYS}" \
             --arg timestamp "${TIMESTAMP}" \
             --argjson unix_timestamp "${UNIX_TIMESTAMP}" \
+            --arg role_mention "<@&API>" \
             '{
+              "content": $role_mention,
               "embeds": [
                 {
                   "title": $title,
                   "description": $pr_list,
-                  "color": $color,
+                  "color": 3066993,
                   "fields": [
-
+                    {
+                      "name": "📦 Repository",
+                      "value": "[api](https://github.com/T-ESP-ASSTAGJ/api)",
+                      "inline": true
+                    },
                     {
                       "name": "📊 Total PRs",
                       "value": $pr_count,
@@ -126,38 +134,221 @@ jobs:
                     },
                     {
                       "name": "🔗 Quick Actions",
-                      "value": "[API PRs](https://github.com/T-ESP-ASSTAGJ/api/pulls) • [Client PRs](https://github.com/T-ESP-ASSTAGJ/client/pulls) • [Infra PRs](https://github.com/T-ESP-ASSTAGJ/infra/pulls)",
+                      "value": "[View All PRs](https://github.com/T-ESP-ASSTAGJ/api/pulls) • [Create New PR](https://github.com/T-ESP-ASSTAGJ/api/compare)",
                       "inline": false
                     }
                   ],
                   "timestamp": $timestamp,
                   "footer": {
-                    "text": "T-ESP-ASSTAGJ • GitHub Actions",
+                    "text": "api • GitHub Actions",
                     "icon_url": "https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png"
                   }
                 }
               ]
-            }' > discord_payload.json
+            }' > api_discord_payload.json
           
-          # Send to Discord using the PR reminder webhook
+          # Send to Discord using the API webhook
           HTTP_RESPONSE=$(curl -s -w "%{http_code}" \
                               -H "Content-Type: application/json" \
-                              -d @discord_payload.json \
-                              "${{ secrets.PR_REMINDER_WEBHOOK_URL }}")
+                              -d @api_discord_payload.json \
+                              "${{ secrets.PR_BACK_REMINDER_WEBHOOK_URL }}")
           
           HTTP_CODE=${HTTP_RESPONSE: -3}
           
           if [[ $HTTP_CODE -ge 200 && $HTTP_CODE -lt 300 ]]; then
-            echo "✅ PR reminder sent successfully! (HTTP $HTTP_CODE)"
+            echo "✅ API PR reminder sent successfully! (HTTP $HTTP_CODE)"
           else
-            echo "❌ Failed to send PR reminder. HTTP Code: $HTTP_CODE"
+            echo "❌ Failed to send API PR reminder. HTTP Code: $HTTP_CODE"
             echo "Response: ${HTTP_RESPONSE%???}"
-            exit 1
           fi
         env:
-          PR_REMINDER_WEBHOOK_URL: ${{ secrets.PR_REMINDER_WEBHOOK_URL }}
+          PR_BACK_REMINDER_WEBHOOK_URL: ${{ secrets.PR_BACK_REMINDER_WEBHOOK_URL }}
+
+      - name: Send Client notifications
+        if: steps.check-prs.outputs.client_pr_count > 0
+        run: |
+          # Create timestamp
+          TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%S.000Z)
+          UNIX_TIMESTAMP=$(date +%s)
+          
+          PR_COUNT=${{ steps.check-prs.outputs.client_pr_count }}
+          
+          # Build title based on PR count
+          if [[ $PR_COUNT -eq 1 ]]; then
+            TITLE="📋 1 Client Pull Request Needs Attention!"
+          else
+            TITLE="📋 ${PR_COUNT} Client Pull Requests Need Attention!"
+          fi
+          
+          # Create PR list for Client
+          PR_LIST=$(jq -r '.[] | "• **[\(.title)](\(.url))**\n  by \(.author.login) on `\(.headRefName)`\n"' client_prs.json | head -10)
+          
+          # If more than 10 PRs, add a note
+          if [[ $PR_COUNT -gt 10 ]]; then
+            PR_LIST="${PR_LIST}\n• ... and $((PR_COUNT - 10)) more"
+          fi
+          
+          # Get oldest PR for additional info
+          OLDEST_PR=$(jq -r 'sort_by(.createdAt) | .[0]' client_prs.json)
+          OLDEST_DAYS=$(( ($(date +%s) - $(date -d "$(echo "$OLDEST_PR" | jq -r '.createdAt')" +%s)) / 86400 ))
+          
+          # Build Discord payload using jq
+          jq -n \
+            --arg title "${TITLE}" \
+            --arg pr_list "${PR_LIST}" \
+            --arg pr_count "${PR_COUNT}" \
+            --arg oldest_days "${OLDEST_DAYS}" \
+            --arg timestamp "${TIMESTAMP}" \
+            --argjson unix_timestamp "${UNIX_TIMESTAMP}" \
+            --arg role_mention "<@&Client>" \
+            '{
+              "content": $role_mention,
+              "embeds": [
+                {
+                  "title": $title,
+                  "description": $pr_list,
+                  "color": 15844367,
+                  "fields": [
+                    {
+                      "name": "📦 Repository",
+                      "value": "[client](https://github.com/T-ESP-ASSTAGJ/client)",
+                      "inline": true
+                    },
+                    {
+                      "name": "📊 Total PRs",
+                      "value": $pr_count,
+                      "inline": true
+                    },
+                    {
+                      "name": "⏰ Oldest PR",
+                      "value": "\($oldest_days) days old",
+                      "inline": true
+                    },
+                    {
+                      "name": "🔗 Quick Actions",
+                      "value": "[View All PRs](https://github.com/T-ESP-ASSTAGJ/client/pulls) • [Create New PR](https://github.com/T-ESP-ASSTAGJ/client/compare)",
+                      "inline": false
+                    }
+                  ],
+                  "timestamp": $timestamp,
+                  "footer": {
+                    "text": "client • GitHub Actions",
+                    "icon_url": "https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png"
+                  }
+                }
+              ]
+            }' > client_discord_payload.json
+          
+          # Send to Discord using the Client webhook
+          HTTP_RESPONSE=$(curl -s -w "%{http_code}" \
+                              -H "Content-Type: application/json" \
+                              -d @client_discord_payload.json \
+                              "${{ secrets.PR_FRONT_REMINDER_WEBHOOK_URL }}")
+          
+          HTTP_CODE=${HTTP_RESPONSE: -3}
+          
+          if [[ $HTTP_CODE -ge 200 && $HTTP_CODE -lt 300 ]]; then
+            echo "✅ Client PR reminder sent successfully! (HTTP $HTTP_CODE)"
+          else
+            echo "❌ Failed to send Client PR reminder. HTTP Code: $HTTP_CODE"
+            echo "Response: ${HTTP_RESPONSE%???}"
+          fi
+        env:
+          PR_FRONT_REMINDER_WEBHOOK_URL: ${{ secrets.PR_FRONT_REMINDER_WEBHOOK_URL }}
+
+      - name: Send Infra notifications
+        if: steps.check-prs.outputs.infra_pr_count > 0
+        run: |
+          # Create timestamp
+          TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%S.000Z)
+          UNIX_TIMESTAMP=$(date +%s)
+          
+          PR_COUNT=${{ steps.check-prs.outputs.infra_pr_count }}
+          
+          # Build title based on PR count
+          if [[ $PR_COUNT -eq 1 ]]; then
+            TITLE="📋 1 Infra Pull Request Needs Attention!"
+          else
+            TITLE="📋 ${PR_COUNT} Infra Pull Requests Need Attention!"
+          fi
+          
+          # Create PR list for Infra
+          PR_LIST=$(jq -r '.[] | "• **[\(.title)](\(.url))**\n  by \(.author.login) on `\(.headRefName)`\n"' infra_prs.json | head -10)
+          
+          # If more than 10 PRs, add a note
+          if [[ $PR_COUNT -gt 10 ]]; then
+            PR_LIST="${PR_LIST}\n• ... and $((PR_COUNT - 10)) more"
+          fi
+          
+          # Get oldest PR for additional info
+          OLDEST_PR=$(jq -r 'sort_by(.createdAt) | .[0]' infra_prs.json)
+          OLDEST_DAYS=$(( ($(date +%s) - $(date -d "$(echo "$OLDEST_PR" | jq -r '.createdAt')" +%s)) / 86400 ))
+          
+          # Build Discord payload using jq
+          jq -n \
+            --arg title "${TITLE}" \
+            --arg pr_list "${PR_LIST}" \
+            --arg pr_count "${PR_COUNT}" \
+            --arg oldest_days "${OLDEST_DAYS}" \
+            --arg timestamp "${TIMESTAMP}" \
+            --argjson unix_timestamp "${UNIX_TIMESTAMP}" \
+            --arg role_mention "<@&Infra>" \
+            '{
+              "content": $role_mention,
+              "embeds": [
+                {
+                  "title": $title,
+                  "description": $pr_list,
+                  "color": 10181046,
+                  "fields": [
+                    {
+                      "name": "📦 Repository",
+                      "value": "[infra](https://github.com/T-ESP-ASSTAGJ/infra)",
+                      "inline": true
+                    },
+                    {
+                      "name": "📊 Total PRs",
+                      "value": $pr_count,
+                      "inline": true
+                    },
+                    {
+                      "name": "⏰ Oldest PR",
+                      "value": "\($oldest_days) days old",
+                      "inline": true
+                    },
+                    {
+                      "name": "🔗 Quick Actions",
+                      "value": "[View All PRs](https://github.com/T-ESP-ASSTAGJ/infra/pulls) • [Create New PR](https://github.com/T-ESP-ASSTAGJ/infra/compare)",
+                      "inline": false
+                    }
+                  ],
+                  "timestamp": $timestamp,
+                  "footer": {
+                    "text": "infra • GitHub Actions",
+                    "icon_url": "https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png"
+                  }
+                }
+              ]
+            }' > infra_discord_payload.json
+          
+          # Send to Discord using the Infra webhook
+          HTTP_RESPONSE=$(curl -s -w "%{http_code}" \
+                              -H "Content-Type: application/json" \
+                              -d @infra_discord_payload.json \
+                              "${{ secrets.PR_DEVOPS_REMINDER_WEBHOOK_URL }}")
+          
+          HTTP_CODE=${HTTP_RESPONSE: -3}
+          
+          if [[ $HTTP_CODE -ge 200 && $HTTP_CODE -lt 300 ]]; then
+            echo "✅ Infra PR reminder sent successfully! (HTTP $HTTP_CODE)"
+          else
+            echo "❌ Failed to send Infra PR reminder. HTTP Code: $HTTP_CODE"
+            echo "Response: ${HTTP_RESPONSE%???}"
+          fi
+        env:
+          PR_DEVOPS_REMINDER_WEBHOOK_URL: ${{ secrets.PR_DEVOPS_REMINDER_WEBHOOK_URL }}
 
       - name: No PRs message
-        if: steps.check-prs.outputs.pr_count == 0
+        if: steps.check-prs.outputs.total_pr_count == 0
         run: |
           echo "🎉 No open pull requests found! Great job keeping up with reviews."
