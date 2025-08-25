@@ -23,10 +23,6 @@ on:
         required: false
         type: string
         description: 'Discord webhook URL for alerts'
-    secrets:
-      DISCORD_WEBHOOK_URL:
-        required: false
-        description: 'Discord webhook URL for alerts'
     outputs:
       scan_results:
         description: 'Summary of scan results'
@@ -54,7 +50,7 @@ jobs:
           cache: true
           version: v0.64.1
 
-      # ✅ AJOUTÉ: Créer config Trivy par défaut si elle n'existe pas
+      # Créer config Trivy par défaut si elle n'existe pas
       - name: Create default Trivy config
         if: ${{ !contains(inputs.trivy_config_file, '/') }}
         run: |
@@ -73,7 +69,7 @@ jobs:
           dependency:
             check: true
           EOF
-          echo "✅ Default Trivy config created at .github/trivy.yaml"
+          echo "Default Trivy config created at .github/trivy.yaml"
 
       # Détection automatique du type de projet
       - name: Detect project type
@@ -84,17 +80,17 @@ jobs:
           # Détection des langages/frameworks
           if [ -f "composer.json" ]; then
             echo "php_project=true" >> $GITHUB_OUTPUT
-            echo "✅ PHP project detected (composer.json found)"
+            echo "PHP project detected (composer.json found)"
           fi
           
           if [ -f "package.json" ]; then
             echo "js_project=true" >> $GITHUB_OUTPUT
-            echo "✅ JavaScript/Node project detected (package.json found)"
+            echo "JavaScript/Node project detected (package.json found)"
           fi
           
           if [ -f "Dockerfile" ]; then
             echo "docker_project=true" >> $GITHUB_OUTPUT
-            echo "✅ Docker project detected (Dockerfile found)"
+            echo "Docker project detected (Dockerfile found)"
           fi
           
           echo "=== Detection complete ==="
@@ -139,13 +135,13 @@ jobs:
 
       - name: Generate human-readable report
         run: |
-          echo "# 🔒 Trivy Security Scan Report" > scan-report.md
+          echo "# Security Scan Report" > scan-report.md
           echo "" >> scan-report.md
-          echo "## 📊 Scan Summary" >> scan-report.md
+          echo "## Scan Summary" >> scan-report.md
           echo "" >> scan-report.md
           
           # Filesystem scan summary
-          echo "### 📁 Filesystem Scan" >> scan-report.md
+          echo "### Filesystem Scan" >> scan-report.md
           if [ -f "trivy-fs-results.sarif" ]; then
             trivy fs . --format table --severity CRITICAL,HIGH,MEDIUM >> scan-report.md 2>/dev/null || echo "No vulnerabilities found in filesystem" >> scan-report.md
           fi
@@ -153,7 +149,7 @@ jobs:
           
           # Image scan summary (si applicable)
           if [ "${{ steps.detect.outputs.docker_project }}" == "true" ] && [ "${{ inputs.image_name }}" != "" ]; then
-            echo "### 🐳 Docker Image Scan" >> scan-report.md
+            echo "### Docker Image Scan" >> scan-report.md
             trivy image ${{ inputs.image_name }}:${{ inputs.image_tag }} --format table --severity CRITICAL,HIGH,MEDIUM >> scan-report.md 2>/dev/null || echo "No vulnerabilities found in image" >> scan-report.md
             echo "" >> scan-report.md
           fi
@@ -191,20 +187,20 @@ jobs:
           # Déterminer s'il faut alerter
           if [ $CRITICAL_COUNT -gt 0 ] || [ $HIGH_COUNT -gt 0 ]; then
             echo "has_vulns=true" >> $GITHUB_OUTPUT
-            echo "🚨 Vulnerabilities found - alerts will be sent"
+            echo "Vulnerabilities found - alerts will be sent"
           else
             echo "has_vulns=false" >> $GITHUB_OUTPUT
-            echo "✅ No critical/high vulnerabilities found"
+            echo "No critical/high vulnerabilities found"
           fi
 
-      # Alerte Discord (utilise le SECRET maintenant)
+      # Alerte Discord
       - name: Send Discord alert
-        if: ${{ steps.summary.outputs.has_vulns == 'true' && inputs.DISCORD_WEBHOOK_URL != '' }}
+        if: ${{ steps.summary.outputs.has_vulns == 'true' && inputs.discord_webhook_url != '' }}
         run: |
           curl -H "Content-Type: application/json" \
                -d '{
                  "embeds": [{
-                   "title": "🚨 Security Vulnerabilities Detected",
+                   "title": "Security Vulnerabilities Detected",
                    "description": "Critical or High vulnerabilities found in `${{ github.repository }}`",
                    "color": 15158332,
                    "fields": [
@@ -232,7 +228,7 @@ jobs:
                    "timestamp": "'$(date -u +%Y-%m-%dT%H:%M:%SZ)'"
                  }]
                }' \
-               ${{ inputs.DISCORD_WEBHOOK_URL }}
+               ${{ inputs.discord_webhook_url }}
 
       # Upload des artifacts pour consultation
       - name: Upload scan artifacts
