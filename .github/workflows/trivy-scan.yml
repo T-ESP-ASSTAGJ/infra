@@ -39,6 +39,10 @@ jobs:
   trivy-security-scan:
     name: Trivy Security Scan
     runs-on: ubuntu-latest
+    permissions:
+      security-events: write  # Permission pour upload SARIF
+      contents: read          # Permission pour checkout
+      pull-requests: write    # Permission pour commenter les PRs
     outputs:
       results_summary: ${{ steps.summary.outputs.results }}
       has_vulnerabilities: ${{ steps.summary.outputs.has_vulns }}
@@ -108,7 +112,6 @@ jobs:
           trivy-config: ${{ inputs.trivy_config_file }}
           format: 'sarif'
           output: 'trivy-fs-results.sarif'
-          skip-setup-trivy: true
 
       # Scan 2: Image Docker (si applicable)
       - name: Run Trivy image scan
@@ -120,7 +123,6 @@ jobs:
           trivy-config: ${{ inputs.trivy_config_file }}
           format: 'sarif'
           output: 'trivy-image-results.sarif'
-          skip-setup-trivy: true
 
       # Upload des résultats vers GitHub Security
       - name: Upload filesystem scan results
