@@ -199,7 +199,7 @@ jobs:
 
       # Alerte Discord (utilise le SECRET maintenant)
       - name: Send Discord alert
-        if: ${{ steps.summary.outputs.has_vulns == 'true' && secrets.DISCORD_WEBHOOK_URL != '' }}
+        if: ${{ steps.summary.outputs.has_vulns == 'true' && inputs.DISCORD_WEBHOOK_URL != '' }}
         run: |
           curl -H "Content-Type: application/json" \
                -d '{
@@ -232,7 +232,7 @@ jobs:
                    "timestamp": "'$(date -u +%Y-%m-%dT%H:%M:%SZ)'"
                  }]
                }' \
-               ${{ secrets.DISCORD_WEBHOOK_URL }}
+               ${{ inputs.DISCORD_WEBHOOK_URL }}
 
       # Upload des artifacts pour consultation
       - name: Upload scan artifacts
