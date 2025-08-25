@@ -310,7 +310,7 @@ jobs:
 
       # Notification Discord améliorée
       - name: Send Discord notification
-        if: ${{ (steps.summary.outputs.has_vulns == 'true' || github.event_name == 'schedule') && (inputs.discord_webhook_url != '' || secrets.DISCORD_WEBHOOK_URL != '') }}
+        if: ${{ (steps.summary.outputs.has_vulns == 'true' || github.event_name == 'schedule') && (inputs.discord_webhook_url != '' || inputs.DISCORD_WEBHOOK_URL != '') }}
         run: |
           # Utiliser le webhook fourni en input ou en secret
           WEBHOOK_URL="${{ inputs.discord_webhook_url }}"
