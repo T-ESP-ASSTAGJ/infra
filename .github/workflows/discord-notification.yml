@@ -172,6 +172,8 @@ jobs:
               ROLE_MENTION=""
               ;;
           esac
+
+          echo " Notification sent to ${WEBHOOK_URL}"
           
           # Use jq to safely build JSON without shell interpretation issues
           jq -n \
