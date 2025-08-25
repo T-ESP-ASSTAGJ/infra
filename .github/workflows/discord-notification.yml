@@ -152,6 +152,26 @@ jobs:
           # Create timestamp
           TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%S.000Z)
           UNIX_TIMESTAMP=$(date +%s)
+
+          # Set webhook URL and role mention based on repository
+          case "${{ inputs.repository_name }}" in
+            "api")
+              WEBHOOK_URL="${{ secrets.PR_BACK_REMINDER_WEBHOOK_URL }}"
+              ROLE_MENTION="<@&API>"
+              ;;
+            "client")
+              WEBHOOK_URL="${{ secrets.PR_FRONT_REMINDER_WEBHOOK_URL }}"
+              ROLE_MENTION="<@&Client>"
+              ;;
+            "infra")
+              WEBHOOK_URL="${{ secrets.PR_DEVOPS_REMINDER_WEBHOOK_URL }}"
+              ROLE_MENTION="<@&Infra>"
+              ;;
+            *)
+              WEBHOOK_URL="${{ secrets.DISCORD_WEBHOOK_URL }}"
+              ROLE_MENTION=""
+              ;;
+          esac
           
           # Use jq to safely build JSON without shell interpretation issues
           jq -n \
@@ -167,7 +187,9 @@ jobs:
             --arg commit_msg "${{ steps.git-info.outputs.commit_msg }}" \
             --arg timestamp "${TIMESTAMP}" \
             --argjson unix_timestamp "${UNIX_TIMESTAMP}" \
+            --arg role_mention "${ROLE_MENTION}" \
             '{
+              "content": (if $role_mention != "" then $role_mention else null end),
               "embeds": [
                 {
                   "title": $title,
@@ -219,11 +241,11 @@ jobs:
               ]
             }' > discord_payload.json
           
-          # Send to Discord
+          # Send to Discord using the selected webhook URL
           HTTP_RESPONSE=$(curl -s -w "%{http_code}" \
                               -H "Content-Type: application/json" \
                               -d @discord_payload.json \
-                              "${{ secrets.DISCORD_WEBHOOK_URL }}")
+                              "${WEBHOOK_URL}")
           
           HTTP_CODE=${HTTP_RESPONSE: -3}
           
@@ -233,4 +255,5 @@ jobs:
             echo "❌ Failed to send Discord notification. HTTP Code: $HTTP_CODE"
             echo "Response: ${HTTP_RESPONSE%???}"
             exit 1
+          fi
           fi
