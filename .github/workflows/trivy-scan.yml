@@ -17,11 +17,15 @@ on:
       trivy_config_file:
         required: false
         type: string
-        default: '.github/trivy.yaml'  # ✅ CHANGÉ: chemin simplifié
+        default: '.github/trivy.yaml'
         description: 'Path to Trivy config file'
       discord_webhook_url:
         required: false
         type: string
+        description: 'Discord webhook URL for alerts'
+    secrets:
+      DISCORD_WEBHOOK_URL:
+        required: false
         description: 'Discord webhook URL for alerts'
     outputs:
       scan_results:
@@ -34,7 +38,7 @@ on:
 jobs:
   trivy-security-scan:
     name: Trivy Security Scan
-    runs-on: ubuntu-latest  # ✅ CHANGÉ: ubuntu-latest plus stable
+    runs-on: ubuntu-latest
     outputs:
       results_summary: ${{ steps.summary.outputs.results }}
       has_vulnerabilities: ${{ steps.summary.outputs.has_vulns }}
@@ -193,9 +197,9 @@ jobs:
             echo "✅ No critical/high vulnerabilities found"
           fi
 
-      # Alerte Discord (si vulnérabilités trouvées)
+      # Alerte Discord (utilise le SECRET maintenant)
       - name: Send Discord alert
-        if: ${{ steps.summary.outputs.has_vulns == 'true' && inputs.discord_webhook_url != '' }}
+        if: ${{ steps.summary.outputs.has_vulns == 'true' && secrets.DISCORD_WEBHOOK_URL != '' }}
         run: |
           curl -H "Content-Type: application/json" \
                -d '{
@@ -228,7 +232,7 @@ jobs:
                    "timestamp": "'$(date -u +%Y-%m-%dT%H:%M:%SZ)'"
                  }]
                }' \
-               ${{ inputs.discord_webhook_url }}
+               ${{ secrets.DISCORD_WEBHOOK_URL }}
 
       # Upload des artifacts pour consultation
       - name: Upload scan artifacts
