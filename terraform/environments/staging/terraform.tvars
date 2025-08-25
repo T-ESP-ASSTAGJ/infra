@@ -1,0 +1,58 @@
+# =============================================================================
+# STAGING ENVIRONMENT CONFIGURATION
+# =============================================================================
+
+# DigitalOcean Configuration
+do_token = ""
+
+# Project Configuration
+project_name = "jamly-staging"
+region      = "fra1"
+
+# VM Configuration - Staging Defaults
+vm_count     = 2                    # Start small for staging
+droplet_size = "s-1vcpu-2gb"        # Cost-effective for staging
+image       = "ubuntu-22-04-x64"
+
+# Network Configuration
+vpc_ip_range = "10.10.0.0/16"
+
+# Security Configuration
+ssh_keys = []     # Replace with your SSH key name
+allowed_ssh_cidrs = ["0.0.0.0/0"]   # Restrict in production
+allowed_http_cidrs = ["0.0.0.0/0", "::/0"]
+
+# Features - Staging Optimized
+enable_monitoring     = false       # Save costs
+enable_backups        = false       # No backups needed for staging
+
+# Tags
+tags = [
+  "staging",
+  "managed-by-opentofu",
+  "cost-optimized"
+]
+
+# Custom startup script for staging
+user_data = <<-EOF
+#!/bin/bash
+set -e
+
+# Update system
+apt-get update && apt-get upgrade -y
+
+# Install staging-specific tools
+apt-get install -y nginx htop curl git
+
+# Configure nginx with staging banner
+systemctl enable nginx
+systemctl start nginx
+
+# Add staging identifier
+echo "🔧 STAGING ENVIRONMENT" > /var/www/html/staging-banner.txt
+
+# Install development tools
+apt-get install -y nodejs npm
+
+echo "🚀 Staging VM $(hostname) ready!"
+EOF
