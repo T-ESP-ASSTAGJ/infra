@@ -56,7 +56,7 @@ jobs:
         uses: aquasecurity/setup-trivy@v0.2.0
         with:
           cache: true
-          version: v0.64.1
+          version: v0.56.1
 
       # Créer config Trivy par défaut si elle n'existe pas
       - name: Create default Trivy config
@@ -132,6 +132,27 @@ jobs:
           
           echo "=== Detection complete - $SCAN_COUNT scan types identified ==="
 
+      # Charger l'image Docker si elle a été uploadée en artifact
+      - name: Download Docker image artifact
+        if: ${{ inputs.image_name != '' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: docker-image
+          path: /tmp/
+        continue-on-error: true
+
+      - name: Load Docker image from artifact
+        if: ${{ inputs.image_name != '' }}
+        run: |
+          if [ -f "/tmp/docker-image.tar" ]; then
+            docker load < /tmp/docker-image.tar
+            echo "✅ Docker image loaded from artifact"
+            docker images | grep "${{ inputs.image_name }}" || echo "❌ Image not found after loading"
+          else
+            echo "⚠️ No Docker image artifact found, will try to pull from registry"
+          fi
+        continue-on-error: true
+
       # Scan 1: Filesystem (dépendances PHP/JS)
       - name: Run Trivy filesystem scan
         uses: aquasecurity/trivy-action@0.28.0
@@ -144,8 +165,9 @@ jobs:
 
       # Scan 2: Image Docker (si applicable)
       - name: Run Trivy image scan
-        if: ${{ steps.detect.outputs.docker_project == 'true' && inputs.image_name != '' }}
+        if: ${{ inputs.image_name != '' }}
         uses: aquasecurity/trivy-action@0.28.0
+        continue-on-error: true
         with:
           scan-type: 'image'
           image-ref: '${{ inputs.image_name }}:${{ inputs.image_tag }}'
@@ -163,7 +185,7 @@ jobs:
 
       - name: Upload image scan results
         uses: github/codeql-action/upload-sarif@v3
-        if: always() && steps.detect.outputs.docker_project == 'true' && inputs.image_name != ''
+        if: always() && hashFiles('trivy-image-results.sarif') != ''
         with:
           sarif_file: 'trivy-image-results.sarif'
           category: 'trivy-image'
@@ -183,7 +205,7 @@ jobs:
           echo "" >> scan-report.md
           
           # Image scan summary (si applicable)
-          if [ "${{ steps.detect.outputs.docker_project }}" == "true" ] && [ "${{ inputs.image_name }}" != "" ]; then
+          if [ -f "trivy-image-results.sarif" ]; then
             echo "### Docker Image Scan" >> scan-report.md
             trivy image ${{ inputs.image_name }}:${{ inputs.image_tag }} --format table --severity CRITICAL,HIGH,MEDIUM >> scan-report.md 2>/dev/null || echo "No vulnerabilities found in image" >> scan-report.md
             echo "" >> scan-report.md
@@ -198,8 +220,6 @@ jobs:
           CRITICAL_COUNT=0
           HIGH_COUNT=0
           MEDIUM_COUNT=0
-          LOW_COUNT=0
-          INFO_COUNT=0
           
           FS_CRITICAL=0
           FS_HIGH=0
@@ -290,12 +310,12 @@ jobs:
 
       # Notification Discord améliorée
       - name: Send Discord notification
-        if: ${{ (github.event_name == 'schedule') && (inputs.discord_webhook_url != '' || inputs.DISCORD_WEBHOOK_URL != '') }}
+        if: ${{ (steps.summary.outputs.has_vulns == 'true' || github.event_name == 'schedule') && (inputs.discord_webhook_url != '' || secrets.DISCORD_WEBHOOK_URL != '') }}
         run: |
           # Utiliser le webhook fourni en input ou en secret
           WEBHOOK_URL="${{ inputs.discord_webhook_url }}"
           if [[ -z "$WEBHOOK_URL" ]]; then
-            WEBHOOK_URL="${{ inputs.DISCORD_WEBHOOK_URL }}"
+            WEBHOOK_URL="${{ secrets.DISCORD_WEBHOOK_URL }}"
           fi
           
           # Préparer les détails des scans
@@ -304,7 +324,7 @@ jobs:
             SCAN_DETAILS="${SCAN_DETAILS}📦 **Filesystem**: ${{ steps.summary.outputs.fs_critical }}🔴 ${{ steps.summary.outputs.fs_high }}🟠 ${{ steps.summary.outputs.fs_medium }}🟡\n"
           fi
           
-          if [[ "${{ steps.detect.outputs.docker_project }}" == "true" ]] && [[ "${{ inputs.image_name }}" != "" ]]; then
+          if [[ -f "trivy-image-results.sarif" ]]; then
             if [[ "${{ steps.summary.outputs.img_critical }}" != "0" ]] || [[ "${{ steps.summary.outputs.img_high }}" != "0" ]] || [[ "${{ steps.summary.outputs.img_medium }}" != "0" ]]; then
               SCAN_DETAILS="${SCAN_DETAILS}🐳 **Docker Image**: ${{ steps.summary.outputs.img_critical }}🔴 ${{ steps.summary.outputs.img_high }}🟠 ${{ steps.summary.outputs.img_medium }}🟡\n"
             fi
