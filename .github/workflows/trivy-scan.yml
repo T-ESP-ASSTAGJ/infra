@@ -62,7 +62,6 @@ jobs:
           version: v0.64.1
 
       # Créer config Trivy par défaut si elle n'existe pas
-      # Créer config Trivy par défaut si elle n'existe pas
       - name: Create default Trivy config
         if: ${{ !contains(inputs.trivy_config_file, '/') }}
         run: |
@@ -90,7 +89,7 @@ jobs:
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          password: ${{ secrets.GITHUB_TOKEN || github.token }}
 
       - name: Debug registry access
         if: ${{ inputs.image_name != '' }}
