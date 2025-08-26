@@ -203,7 +203,7 @@ jobs:
             fi
           else
             echo "❌ Registry login failed"
-            echo "Token length: ${{ length(secrets.GITHUB_TOKEN) }}"
+            echo "Token length: ${{ secrets.GITHUB_TOKEN }}"
             exit 1
           fi
       # Scan 2: Image Docker (si applicable)
