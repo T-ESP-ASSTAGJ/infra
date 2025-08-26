@@ -148,6 +148,18 @@ jobs:
             "🤖 *Auto-created from gitmoji commit in `" + $repo + "` repository*"
           ')
           
+          # Ensure required labels exist (create if missing)
+          REQUIRED_LABELS=("feature:0075ca:New feature or enhancement" "hotfix:d73a49:Critical fix requiring immediate attention" "automated-pr:7057ff:Automatically created pull request")
+          
+          for label_info in "${REQUIRED_LABELS[@]}"; do
+            IFS=':' read -r label_name label_color label_desc <<< "$label_info"
+            gh label create "$label_name" --color "$label_color" --description "$label_desc" 2>/dev/null || true
+          done
+          
+          # Also create repository and ticket labels if they don't exist
+          gh label create "${{ inputs.repository_name }}" --color "6c757d" --description "${{ inputs.repository_name }} repository" 2>/dev/null || true
+          gh label create "$BRANCH_NAME" --color "ffc107" --description "Ticket $BRANCH_NAME" 2>/dev/null || true
+          
           # Build labels array
           LABELS=$(jq -nc \
             --arg priority "$PRIORITY" \
