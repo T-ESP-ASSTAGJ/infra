@@ -38,14 +38,6 @@ output "droplet_info" {
   }
 }
 
-output "firewall_info" {
-  description = "Firewall information"
-  value = var.enable_firewall ? {
-    id   = digitalocean_firewall.main[0].id
-    name = digitalocean_firewall.main[0].name
-  } : null
-}
-
 output "connection_info" {
   description = "Connection information for the VMs"
   value = {
@@ -59,7 +51,6 @@ output "tags" {
   description = "Created tags"
   value = {
     project     = digitalocean_tag.project_tag.name
-    vm          = digitalocean_tag.vm_tag.name
     environment = digitalocean_tag.environment_tag.name
   }
 }

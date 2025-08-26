@@ -43,19 +43,9 @@ module "digitalocean_vm" {
 
   # Security
   ssh_keys           = var.ssh_keys
-  allowed_ssh_cidrs  = var.allowed_ssh_cidrs
-  allowed_http_cidrs = var.allowed_http_cidrs
 
   # Features (staging-specific defaults)
-  enable_monitoring = var.enable_monitoring
   enable_backups    = false  # Disabled for staging
-  enable_firewall   = true
-
-  # Application
-  user_data = var.user_data
-
-  # Tags
-  tags = concat(var.tags, ["env-staging", "managed-by-opentofu"])
 }
 
 # Local variables for staging-specific configuration

@@ -5,8 +5,6 @@
 variable "do_token" {
   description = "DigitalOcean API Token"
   type        = string
-  sensitive   = true
-  default     = ""
 }
 
 variable "project_name" {
@@ -49,34 +47,4 @@ variable "ssh_keys" {
   description = "SSH keys to add to droplets"
   type        = list(string)
   default     = []
-}
-
-variable "allowed_ssh_cidrs" {
-  description = "Allowed SSH CIDR blocks"
-  type        = list(string)
-  default     = ["0.0.0.0/0"]
-}
-
-variable "allowed_http_cidrs" {
-  description = "Allowed HTTP CIDR blocks"
-  type        = list(string)
-  default     = ["0.0.0.0/0", "::/0"]
-}
-
-variable "enable_monitoring" {
-  description = "Enable monitoring"
-  type        = bool
-  default     = false  # Disabled for staging
-}
-
-variable "tags" {
-  description = "Additional tags"
-  type        = list(string)
-  default     = ["staging"]
-}
-
-variable "user_data" {
-  description = "Custom user data"
-  type        = string
-  default     = ""
 }

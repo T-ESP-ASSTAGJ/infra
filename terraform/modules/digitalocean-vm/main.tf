@@ -61,92 +61,10 @@ resource "digitalocean_vpc" "main" {
 }
 
 # -----------------------------------------------------------------------------
-# SECURITY RESOURCES
-# -----------------------------------------------------------------------------
-resource "digitalocean_firewall" "main" {
-  count = var.enable_firewall ? 1 : 0
-
-  name = "${var.project_name}-${var.environment}-fw-${random_string.suffix.result}"
-
-  # SSH access
-  inbound_rule {
-    protocol         = "tcp"
-    port_range       = "22"
-    source_addresses = var.allowed_ssh_cidrs
-  }
-
-  # HTTP
-  inbound_rule {
-    protocol         = "tcp"
-    port_range       = "80"
-    source_addresses = var.allowed_http_cidrs
-  }
-
-  # HTTPS
-  inbound_rule {
-    protocol         = "tcp"
-    port_range       = "443"
-    source_addresses = var.allowed_http_cidrs
-  }
-
-  # Additional ports
-  dynamic "inbound_rule" {
-    for_each = var.additional_ports
-    content {
-      protocol         = "tcp"
-      port_range       = tostring(inbound_rule.value)
-      source_addresses = var.allowed_http_cidrs
-    }
-  }
-
-  # Internal communication
-  inbound_rule {
-    protocol    = "tcp"
-    port_range  = "1-65535"
-    source_tags = [digitalocean_tag.vm_tag.id]
-  }
-
-  inbound_rule {
-    protocol    = "udp"
-    port_range  = "1-65535"
-    source_tags = [digitalocean_tag.vm_tag.id]
-  }
-
-  inbound_rule {
-    protocol    = "icmp"
-    source_tags = [digitalocean_tag.vm_tag.id]
-  }
-
-  # Outbound traffic
-  outbound_rule {
-    protocol              = "tcp"
-    port_range            = "1-65535"
-    destination_addresses = ["0.0.0.0/0", "::/0"]
-  }
-
-  outbound_rule {
-    protocol              = "udp"
-    port_range            = "1-65535"
-    destination_addresses = ["0.0.0.0/0", "::/0"]
-  }
-
-  outbound_rule {
-    protocol              = "icmp"
-    destination_addresses = ["0.0.0.0/0", "::/0"]
-  }
-
-  droplet_ids = digitalocean_droplet.vm[*].id
-}
-
-# -----------------------------------------------------------------------------
 # TAGS
 # -----------------------------------------------------------------------------
 resource "digitalocean_tag" "project_tag" {
-  name = "${var.project_name}-${var.environment}"
-}
-
-resource "digitalocean_tag" "vm_tag" {
-  name = "${var.project_name}-${var.environment}-vm"
+  name = var.project_name
 }
 
 resource "digitalocean_tag" "environment_tag" {
@@ -172,16 +90,11 @@ resource "digitalocean_droplet" "vm" {
   ssh_keys = length(var.ssh_keys) > 0 ? data.digitalocean_ssh_keys.existing[0].ssh_keys[*].id : []
 
   # Features
-  monitoring = var.enable_monitoring
   backups    = var.enable_backups
-
-  # User data
-  user_data = var.user_data != "" ? var.user_data : (var.user_data_file != "" ? file(var.user_data_file) : local.default_user_data)
 
   # Tags
   tags = concat([
     digitalocean_tag.project_tag.id,
-    digitalocean_tag.vm_tag.id,
     digitalocean_tag.environment_tag.id
   ], var.tags)
 

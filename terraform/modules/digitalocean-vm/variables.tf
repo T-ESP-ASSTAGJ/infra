@@ -115,26 +115,9 @@ variable "ssh_keys" {
   default     = []
 }
 
-variable "allowed_ssh_cidrs" {
-  description = "CIDR blocks allowed to SSH to instances"
-  type        = list(string)
-  default     = ["0.0.0.0/0"]
-}
-
-variable "allowed_http_cidrs" {
-  description = "CIDR blocks allowed to access HTTP/HTTPS"
-  type        = list(string)
-  default     = ["0.0.0.0/0", "::/0"]
-}
-
 # -----------------------------------------------------------------------------
 # FEATURES CONFIGURATION
 # -----------------------------------------------------------------------------
-variable "enable_monitoring" {
-  description = "Enable DigitalOcean monitoring for Droplets"
-  type        = bool
-  default     = false
-}
 
 variable "enable_ipv6" {
   description = "Enable IPv6 for Droplets"
@@ -146,31 +129,4 @@ variable "enable_backups" {
   description = "Enable automated backups"
   type        = bool
   default     = false
-}
-
-variable "enable_firewall" {
-  description = "Create and apply firewall rules"
-  type        = bool
-  default     = true
-}
-
-variable "additional_ports" {
-  description = "Additional ports to open in firewall"
-  type        = list(number)
-  default     = []
-}
-
-# -----------------------------------------------------------------------------
-# APPLICATION CONFIGURATION
-# -----------------------------------------------------------------------------
-variable "user_data" {
-  description = "User data script to run on VM startup"
-  type        = string
-  default     = ""
-}
-
-variable "user_data_file" {
-  description = "Path to user data file (alternative to user_data variable)"
-  type        = string
-  default     = ""
 }
