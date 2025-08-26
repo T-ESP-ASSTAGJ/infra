@@ -19,7 +19,7 @@ jobs:
       - name: Check for open pull requests across all repos
         id: check-prs
         run: |
-          # List of repositories to check
+          # List of repositorie to check
           REPOS=("T-ESP-ASSTAGJ/api" "T-ESP-ASSTAGJ/client" "T-ESP-ASSTAGJ/infra")
           
           # Initialize separate PR lists for each repo
