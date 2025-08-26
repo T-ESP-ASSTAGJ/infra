@@ -29,7 +29,6 @@ jobs:
   create-feature-pr:
     runs-on: ubuntu-latest
     if: github.ref != 'refs/heads/staging' && github.ref != 'refs/heads/main' && github.ref != 'refs/heads/master'
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -120,56 +119,71 @@ jobs:
             PR_TITLE="$REPO_EMOJI $BRANCH_NAME - $REPO_CONTEXT"
           fi
           
-          # Create PR body
-          PR_BODY="## $REPO_EMOJI $([ "$PRIORITY" == "critical" ] && echo "🚨 Critical Hotfix" || echo "$REPO_CONTEXT Ready for Review")
-          **Repository**: \`${{ inputs.repository_name }}\`
-          **Ticket**: $BRANCH_NAME
-          $([ "$PRIORITY" == "critical" ] && echo "**Priority**: Critical - Requires immediate review")
-          ### 📋 Changes
-          \`\`\`
-          $COMMIT_MSG
-          \`\`\`  
+          # Build PR body using jq to handle proper escaping
+          PR_BODY=$(jq -nr \
+            --arg emoji "$REPO_EMOJI" \
+            --arg context "$REPO_CONTEXT" \
+            --arg priority "$PRIORITY" \
+            --arg repo "${{ inputs.repository_name }}" \
+            --arg ticket "$BRANCH_NAME" \
+            --arg commit "$COMMIT_MSG" \
+            '
+            "## " + $emoji + " " + 
+            (if $priority == "critical" then "🚨 Critical Hotfix" else $context + " Ready for Review" end) + "\n\n" +
+            "**Repository**: `" + $repo + "`\n" +
+            "**Ticket**: " + $ticket + "\n" +
+            (if $priority == "critical" then "**Priority**: Critical - Requires immediate review\n\n" else "\n" end) +
+            "### 📋 Changes\n```\n" + $commit + "\n```\n\n" +
+            "### 🔍 Review Checklist\n" +
+            "- [ ] Code follows project standards\n" +
+            "- [ ] Tests added/updated as needed\n" +
+            "- [ ] Documentation updated if required\n" +
+            (if $priority == "critical" then "- [ ] Hotfix tested and verified\n" else "" end) +
+            (if $repo == "infra" then "- [ ] Infrastructure changes reviewed for security\n" else "" end) +
+            (if $repo == "client" then "- [ ] UI/UX changes tested across browsers\n" else "" end) +
+            (if $repo == "api" then "- [ ] API changes backward compatible\n" else "" end) +
+            "\n### 📊 Repository Context\n" +
+            "This PR affects the **" + $context + "** components of the system.\n\n" +
+            "---\n" +
+            "🤖 *Auto-created from gitmoji commit in `" + $repo + "` repository*"
+          ')
           
-          ### 📊 Repository Context
-          This PR affects the **$REPO_CONTEXT** components of the system.
-          ---
-          🤖 *Auto-created from gitmoji commit in \`${{ inputs.repository_name }}\` repository*"
-          # Build gh pr create command
-          GH_COMMAND="gh pr create --title \"$PR_TITLE\" --body \"$PR_BODY\" --base \"$BASE_BRANCH\" --head \"$BRANCH_NAME\""
-          # Add labels
-          if [[ "$PRIORITY" == "critical" ]]; then
-          GH_COMMAND="$GH_COMMAND --label hotfix"
-          else
-          GH_COMMAND="$GH_COMMAND --label feature"
-          fi
-          GH_COMMAND="$GH_COMMAND --label automated-pr --label ${{ inputs.repository_name }} --label $BRANCH_NAME"
+          # Build labels array
+          LABELS=$(jq -nc \
+            --arg priority "$PRIORITY" \
+            --arg repo "${{ inputs.repository_name }}" \
+            --arg ticket "$BRANCH_NAME" \
+            '[
+              (if $priority == "critical" then "hotfix" else "feature" end),
+              "automated-pr",
+              $repo,
+              $ticket
+            ]'
+          )
           
-          # Add draft flag for non-critical PRs
-          if [[ "$PRIORITY" != "critical" ]]; then
-          GH_COMMAND="$GH_COMMAND --draft"
-          fi
-          
-          # Add reviewers if specified
+          # Build reviewers array if provided
+          REVIEWERS_ARG=""
           if [[ -n "${{ inputs.reviewers }}" ]]; then
-          # Split comma-separated reviewers and add each one
-          IFS=',' read -ra REVIEWERS <<< "${{ inputs.reviewers }}"
-          for reviewer in "${REVIEWERS[@]}"; do
-          reviewer=$(echo "$reviewer" | xargs) # trim whitespace
-          GH_COMMAND="$GH_COMMAND --reviewer \"$reviewer\""
-          done
+            REVIEWERS=$(echo "${{ inputs.reviewers }}" | jq -R 'split(",") | map(. | gsub("^\\s+|\\s+$"; ""))')
+            REVIEWERS_ARG="--reviewer $(echo "$REVIEWERS" | jq -r '.[]' | tr '\n' ',' | sed 's/,$//')"
           fi
           
+          TEAM_REVIEWERS_ARG=""
           if [[ -n "${{ inputs.team_reviewers }}" ]]; then
-          # Split comma-separated team reviewers and add each one
-          IFS=',' read -ra TEAM_REVIEWERS <<< "${{ inputs.team_reviewers }}"
-          for team_reviewer in "${TEAM_REVIEWERS[@]}"; do
-          team_reviewer=$(echo "$team_reviewer" | xargs) # trim whitespace
-          GH_COMMAND="$GH_COMMAND --reviewer \"$team_reviewer\""
-          done
+            TEAM_REVIEWERS=$(echo "${{ inputs.team_reviewers }}" | jq -R 'split(",") | map(. | gsub("^\\s+|\\s+$"; ""))')
+            TEAM_REVIEWERS_ARG="--reviewer $(echo "$TEAM_REVIEWERS" | jq -r '.[]' | tr '\n' ',' | sed 's/,$//')"
           fi
           
-          # Execute the command
-          eval "$GH_COMMAND"
+          # Create the PR
+          gh pr create \
+            --title "$PR_TITLE" \
+            --body "$PR_BODY" \
+            --base "$BASE_BRANCH" \
+            --head "$BRANCH_NAME" \
+            $(echo "$LABELS" | jq -r '.[] | "--label " + .' | tr '\n' ' ') \
+            $([ "$PRIORITY" != "critical" ] && echo "--draft") \
+            $REVIEWERS_ARG \
+            $TEAM_REVIEWERS_ARG
           
           echo "✅ PR created successfully"
         env:
