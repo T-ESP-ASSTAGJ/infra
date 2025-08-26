@@ -176,7 +176,6 @@ jobs:
         run: |
           echo "GITHUB_TOKEN is present: ${{ secrets.GITHUB_TOKEN != '' }}"
           echo "GH_TOKEN is present: ${{ secrets.GH_TOKEN != '' }}"
-          echo "Length of GITHUB_TOKEN: ${{ length(secrets.GITHUB_TOKEN) }}"
 
       # Scan 2: Image Docker (si applicable)
       - name: Run Trivy image scan
