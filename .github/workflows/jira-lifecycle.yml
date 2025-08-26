@@ -9,7 +9,7 @@ on:
 
 jobs:
   update-jira:
-    uses: T-ESP-ASSTAGJ/infra/.github/workflows/_reusable/jira-lifecycle.yml@main
+    uses: T-ESP-ASSTAGJ/infra/.github/workflows/reusable_jira-lifecycle.yml@main
     with:
       repository_name: "infra"
     secrets:

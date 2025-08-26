@@ -7,7 +7,7 @@ on:
 
 jobs:
   create-pr:
-    uses: T-ESP-ASSTAGJ/infra/.github/workflows/_reusable/pr-creation.yml@main
+    uses: T-ESP-ASSTAGJ/infra/.github/workflows/reusable_pr-creation.yml@main
     with:
       repository_name: "infra"
       base_branch: "staging"

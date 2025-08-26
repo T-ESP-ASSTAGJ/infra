@@ -24,7 +24,7 @@ on:
 
 jobs:
   create-deployment-pr:
-    uses: T-ESP-ASSTAGJ/infra/.github/workflows/_reusable/staging-to-main.yml@main
+    uses: T-ESP-ASSTAGJ/infra/.github/workflows/reusable_staging-to-main.yml@main
     with:
       repository_name: "infra"
       environment: ${{ inputs.environment }}
