@@ -82,48 +82,103 @@ jobs:
               ;;
           esac
 
-      - name: Create Pull Request
+      - name: Check if PR already exists
+        id: check_pr
         if: steps.gitmoji_check.outputs.has_gitmoji == 'true'
-        uses: peter-evans/create-pull-request@v6
-        with:
-          token: ${{ secrets.AUTO_DEPLOY_TOKEN }}
-          branch: ${{ github.ref_name }}
-          base: ${{ inputs.base_branch }}
-          title: ${{ steps.gitmoji_check.outputs.priority == 'critical' && '🚑 HOTFIX:' || steps.repo_config.outputs.emoji }} ${{ github.ref_name }} - ${{ steps.repo_config.outputs.context }}
-          body: |
-            ## ${{ steps.gitmoji_check.outputs.priority == 'critical' && '🚨 Critical Hotfix' || format('{0} {1} Ready for Review', steps.repo_config.outputs.emoji, steps.repo_config.outputs.context) }}
-            
-            **Repository**: `${{ inputs.repository_name }}`  
-            **Ticket**: ${{ github.ref_name }}  
-            ${{ steps.gitmoji_check.outputs.priority == 'critical' && '**Priority**: Critical - Requires immediate review' || '' }}
-            
-            ### 📋 Changes
-            ```
-            ${{ github.event.head_commit.message }}
-            ```
-            
-            ### 🔍 Review Checklist
-            - [ ] Code follows project standards
-            - [ ] Tests added/updated as needed
-            - [ ] Documentation updated if required
-            ${{ steps.gitmoji_check.outputs.priority == 'critical' && '- [ ] Hotfix tested and verified' || '' }}
-            ${{ inputs.repository_name == 'infra' && '- [ ] Infrastructure changes reviewed for security' || '' }}
-            ${{ inputs.repository_name == 'client' && '- [ ] UI/UX changes tested across browsers' || '' }}
-            ${{ inputs.repository_name == 'api' && '- [ ] API changes backward compatible' || '' }}
-            
-            ### 📊 Repository Context
-            This PR affects the **${{ steps.repo_config.outputs.context }}** components of the system.
-            
-            ---
-            🤖 *Auto-created from gitmoji commit in `${{ inputs.repository_name }}` repository*
-          labels: |
-            ${{ steps.gitmoji_check.outputs.priority == 'critical' && 'hotfix' || 'feature' }}
-            automated-pr
-            ${{ inputs.repository_name }}
-            ${{ github.ref_name }}
-          reviewers: ${{ inputs.reviewers }}
-          team-reviewers: ${{ inputs.team_reviewers }}
-          draft: ${{ steps.gitmoji_check.outputs.priority != 'critical' }}
+        run: |
+          BRANCH_NAME="${{ github.ref_name }}"
+          BASE_BRANCH="${{ inputs.base_branch }}"
+          
+          # Check if PR already exists
+          EXISTING_PR=$(gh pr list --head "$BRANCH_NAME" --base "$BASE_BRANCH" --json number --jq '.[0].number' 2>/dev/null || echo "")
+          
+          if [[ -n "$EXISTING_PR" && "$EXISTING_PR" != "null" ]]; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "pr_number=$EXISTING_PR" >> $GITHUB_OUTPUT
+            echo "ℹ️ PR already exists: #$EXISTING_PR"
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "🚀 Will create new PR"
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.AUTO_DEPLOY_TOKEN }}
+
+      - name: Create Pull Request
+        if: steps.gitmoji_check.outputs.has_gitmoji == 'true' && steps.check_pr.outputs.exists == 'false'
+        run: |
+          BRANCH_NAME="${{ github.ref_name }}"
+          BASE_BRANCH="${{ inputs.base_branch }}"
+          REPO_EMOJI="${{ steps.repo_config.outputs.emoji }}"
+          REPO_CONTEXT="${{ steps.repo_config.outputs.context }}"
+          PRIORITY="${{ steps.gitmoji_check.outputs.priority }}"
+          COMMIT_MSG=$(git log -1 --format="%s")
+          
+          # Determine title based on priority
+          if [[ "$PRIORITY" == "critical" ]]; then
+            PR_TITLE="🚑 HOTFIX: $BRANCH_NAME - $REPO_CONTEXT"
+          else
+            PR_TITLE="$REPO_EMOJI $BRANCH_NAME - $REPO_CONTEXT"
+          fi
+          
+          # Create PR body
+          PR_BODY="## $REPO_EMOJI $([ "$PRIORITY" == "critical" ] && echo "🚨 Critical Hotfix" || echo "$REPO_CONTEXT Ready for Review")
+          **Repository**: \`${{ inputs.repository_name }}\`
+          **Ticket**: $BRANCH_NAME
+          $([ "$PRIORITY" == "critical" ] && echo "**Priority**: Critical - Requires immediate review")
+          ### 📋 Changes
+          \`\`\`
+          $COMMIT_MSG
+          \`\`\`  
+          
+          ### 📊 Repository Context
+          This PR affects the **$REPO_CONTEXT** components of the system.
+          ---
+          🤖 *Auto-created from gitmoji commit in \`${{ inputs.repository_name }}\` repository*"
+          # Build gh pr create command
+          GH_COMMAND="gh pr create --title \"$PR_TITLE\" --body \"$PR_BODY\" --base \"$BASE_BRANCH\" --head \"$BRANCH_NAME\""
+          # Add labels
+          if [[ "$PRIORITY" == "critical" ]]; then
+          GH_COMMAND="$GH_COMMAND --label hotfix"
+          else
+          GH_COMMAND="$GH_COMMAND --label feature"
+          fi
+          GH_COMMAND="$GH_COMMAND --label automated-pr --label ${{ inputs.repository_name }} --label $BRANCH_NAME"
+          
+          # Add draft flag for non-critical PRs
+          if [[ "$PRIORITY" != "critical" ]]; then
+          GH_COMMAND="$GH_COMMAND --draft"
+          fi
+          
+          # Add reviewers if specified
+          if [[ -n "${{ inputs.reviewers }}" ]]; then
+          # Split comma-separated reviewers and add each one
+          IFS=',' read -ra REVIEWERS <<< "${{ inputs.reviewers }}"
+          for reviewer in "${REVIEWERS[@]}"; do
+          reviewer=$(echo "$reviewer" | xargs) # trim whitespace
+          GH_COMMAND="$GH_COMMAND --reviewer \"$reviewer\""
+          done
+          fi
+          
+          if [[ -n "${{ inputs.team_reviewers }}" ]]; then
+          # Split comma-separated team reviewers and add each one
+          IFS=',' read -ra TEAM_REVIEWERS <<< "${{ inputs.team_reviewers }}"
+          for team_reviewer in "${TEAM_REVIEWERS[@]}"; do
+          team_reviewer=$(echo "$team_reviewer" | xargs) # trim whitespace
+          GH_COMMAND="$GH_COMMAND --reviewer \"$team_reviewer\""
+          done
+          fi
+          
+          # Execute the command
+          eval "$GH_COMMAND"
+          
+          echo "✅ PR created successfully"
+        env:
+          GH_TOKEN: ${{ secrets.AUTO_DEPLOY_TOKEN }}
+
+      - name: Skip if PR exists
+        if: steps.gitmoji_check.outputs.has_gitmoji == 'true' && steps.check_pr.outputs.exists == 'true'
+        run: |
+          echo "ℹ️ PR already exists (#${{ steps.check_pr.outputs.pr_number }}), skipping creation"
 
       - name: Comment if no gitmoji
         if: steps.gitmoji_check.outputs.has_gitmoji == 'false'
