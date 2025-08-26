@@ -1,0 +1,18 @@
+name: PR Creation
+
+on:
+  push:
+    branches:
+      - 'staging'
+      - 'main'
+      - 'master'
+
+jobs:
+  create-pr:
+    uses: T-ESP-ASSTAGJ/infra/.github/workflows/pr-creation.yml@main
+    with:
+      repository_name: "client"
+    secrets:
+      AUTO_DEPLOY_TOKEN: ${{ secrets.AUTO_DEPLOY_TOKEN }}
+
+---
