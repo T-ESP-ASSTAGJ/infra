@@ -134,16 +134,7 @@ jobs:
             "**Ticket**: " + $ticket + "\n" +
             (if $priority == "critical" then "**Priority**: Critical - Requires immediate review\n\n" else "\n" end) +
             "### 📋 Changes\n```\n" + $commit + "\n```\n\n" +
-            "### 🔍 Review Checklist\n" +
-            "- [ ] Code follows project standards\n" +
-            "- [ ] Tests added/updated as needed\n" +
-            "- [ ] Documentation updated if required\n" +
-            (if $priority == "critical" then "- [ ] Hotfix tested and verified\n" else "" end) +
-            (if $repo == "infra" then "- [ ] Infrastructure changes reviewed for security\n" else "" end) +
-            (if $repo == "client" then "- [ ] UI/UX changes tested across browsers\n" else "" end) +
-            (if $repo == "api" then "- [ ] API changes backward compatible\n" else "" end) +
-            "\n### 📊 Repository Context\n" +
-            "This PR affects the **" + $context + "** components of the system.\n\n" +
+            "\n\n" +
             "---\n" +
             "🤖 *Auto-created from gitmoji commit in `" + $repo + "` repository*"
           ')
