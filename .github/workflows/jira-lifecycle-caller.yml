@@ -1,0 +1,23 @@
+name: Jira Lifecycle
+
+on:
+  push:
+    branches:
+      - 'TEM-*'
+      - 'staging'
+      - 'main'
+      - 'master'
+  pull_request:
+    types: [opened, closed]
+    branches:
+      - 'staging'
+      - 'main'
+      - 'master'
+
+jobs:
+  jira-lifecycle:
+    uses: T-ESP-ASSTAGJ/infra/.github/workflows/jira-lifecycle.yml@main
+    with:
+      repository_name: "client"
+    secrets:
+      JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}

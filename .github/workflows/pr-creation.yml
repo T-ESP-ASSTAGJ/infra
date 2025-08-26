@@ -1,0 +1,140 @@
+name: 🚀 PR Creation on Merge
+
+on:
+  push:
+    branches:
+      - 'staging'
+      - 'main'
+      - 'master'
+
+jobs:
+  create-pr:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.AUTO_DEPLOY_TOKEN }}
+          fetch-depth: 0
+
+      - name: Create Next Stage PR
+        env:
+          GH_TOKEN: ${{ secrets.AUTO_DEPLOY_TOKEN }}
+        run: |
+          CURRENT_BRANCH=${GITHUB_REF#refs/heads/}
+          echo "🔍 Processing merge to: $CURRENT_BRANCH"
+          
+          # Get the most recent merge commit
+          MERGE_COMMIT=$(git log -1 --merges --format="%H %s")
+          MERGE_MSG=$(git log -1 --merges --format="%s")
+          
+          echo "📝 Recent merge: $MERGE_MSG"
+          
+          # Extract source branch from GitHub merge format
+          SOURCE_BRANCH=""
+          if [[ "$MERGE_MSG" =~ from[[:space:]]+([^[:space:]]+) ]]; then
+            SOURCE_BRANCH="${BASH_REMATCH[1]}"
+          fi
+          
+          echo "📊 Source branch: $SOURCE_BRANCH"
+          
+          case "$CURRENT_BRANCH" in
+            staging)
+              # When something merges to staging, create PR from staging to main
+              echo "🎭 Creating staging → main PR"
+          
+              # Check if PR already exists
+              if ! gh pr list --base main --head staging --json number | jq -e '.[] | select(.number)' > /dev/null 2>&1; then
+          
+                # Get all TEM tickets that are in staging but not yet in main
+                STAGING_TICKETS=$(git log staging --not main --oneline --merges | grep -oE 'from TEM-[0-9]+' | sed 's/from //' | sort | uniq | head -10)
+          
+                if [[ -n "$STAGING_TICKETS" ]]; then
+                  TICKET_LIST=$(echo "$STAGING_TICKETS" | tr '\n' ' ')
+                  PR_TITLE="🚀 Deploy to Production: $(echo $STAGING_TICKETS | wc -w) tickets ready"
+          
+                  PR_BODY="## 🚀 Production Deployment
+          
+          **Ready for Production:** $(echo $STAGING_TICKETS | wc -w) tickets tested and approved on staging
+          
+          ### 🎫 Tickets Included:
+          $(echo "$STAGING_TICKETS" | sed 's/^/- /')
+          
+          ### 📋 Deployment Checklist:
+          - [ ] All tickets tested on staging
+          - [ ] Database migrations reviewed
+          - [ ] Monitoring alerts configured
+          - [ ] Rollback plan confirmed
+          
+          ### 🔄 Source:
+          - **From**: staging
+          - **Latest merge**: $SOURCE_BRANCH
+          - **Repository**: ${{ github.repository }}
+          
+          ---
+          🤖 *Auto-created when $SOURCE_BRANCH was merged to staging*"
+          
+                  gh pr create \
+                    --title "$PR_TITLE" \
+                    --body "$PR_BODY" \
+                    --base main \
+                    --head staging \
+                    --label "production,deployment"
+          
+                  echo "✅ Production deployment PR created"
+          
+                  # Create deployment history entry
+                  mkdir -p .github/deployment-history
+                  echo "$(date -Iseconds) | staging→main | $TICKET_LIST | $SOURCE_BRANCH" >> .github/deployment-history/$(date +%Y-%m).log
+          
+                else
+                  echo "ℹ️ No new tickets found for production deployment"
+                fi
+              else
+                echo "ℹ️ staging → main PR already exists"
+              fi
+              ;;
+          
+            main|master)
+              # When something merges to main, log the deployment
+              echo "🎯 Production deployment completed"
+          
+              # Extract tickets that were just deployed
+              DEPLOYED_TICKETS=$(git log -1 --merges --format="%s" | grep -oE 'TEM-[0-9]+' | sort | uniq)
+          
+              if [[ -z "$DEPLOYED_TICKETS" ]]; then
+                # Fallback: look at staging commits that are now in main
+                DEPLOYED_TICKETS=$(git log main --not main~1 --oneline --merges | grep -oE 'from TEM-[0-9]+' | sed 's/from //' | sort | uniq)
+              fi
+          
+              if [[ -n "$DEPLOYED_TICKETS" ]]; then
+                TICKET_LIST=$(echo "$DEPLOYED_TICKETS" | tr '\n' ' ')
+          
+                # Log successful deployment
+                mkdir -p .github/deployment-history
+                echo "$(date -Iseconds) | DEPLOYED | $TICKET_LIST | main | SUCCESS" >> .github/deployment-history/$(date +%Y-%m).log
+          
+                echo "📊 Deployed tickets: $TICKET_LIST"
+          
+                # Create deployment summary
+                cat << EOF > deployment-summary.md
+          # 🎉 Production Deployment Complete
+          
+          **Date**: $(date -Iseconds)
+          **Tickets Deployed**: $(echo $DEPLOYED_TICKETS | wc -w)
+          
+          ## 🎫 Deployed Tickets:
+          $(echo "$DEPLOYED_TICKETS" | sed 's/^/- /')
+          
+          ## 📈 Deployment Stats:
+          - Repository: ${{ github.repository }}
+          - Branch: $CURRENT_BRANCH
+          - Commit: ${GITHUB_SHA:0:8}
+          
+          ---
+          🤖 *Auto-generated deployment summary*
+          EOF
+          
+                echo "✅ Deployment logged and summary created"
+              fi
+              ;;
+          esac

@@ -1,0 +1,195 @@
+name: 🎫 Jira Ticket Lifecycle
+
+on:
+  push:
+    branches:
+      - 'TEM-*'
+      - 'staging'
+      - 'main'
+      - 'master'
+  pull_request:
+    types: [opened, closed]
+    branches:
+      - 'staging'
+      - 'main'
+      - 'master'
+
+jobs:
+  jira-lifecycle:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Process Jira Ticket Lifecycle
+        run: |
+          echo "🎫 Processing Jira ticket lifecycle"
+          echo "Event: ${{ github.event_name }}"
+          echo "Ref: ${{ github.ref }}"
+          
+          # Function to move Jira ticket with history
+          move_jira_ticket() {
+            local TICKET_ID=$1
+            local TARGET_STATUS=$2
+            local REASON=$3
+            local EVENT_TYPE=$4
+          
+            echo "🎫 Processing: $TICKET_ID → $TARGET_STATUS"
+          
+            # Get current ticket info
+            TICKET_INFO=$(curl -s -u "${{ secrets.JIRA_API_TOKEN }}" \
+              "https://t-esp-asstagj.atlassian.net/rest/api/3/issue/$TICKET_ID?fields=status,summary")
+          
+            CURRENT_STATUS=$(echo "$TICKET_INFO" | jq -r '.fields.status.name')
+            SUMMARY=$(echo "$TICKET_INFO" | jq -r '.fields.summary')
+          
+            echo "📊 Current status: $CURRENT_STATUS"
+            echo "📋 Summary: $SUMMARY"
+          
+            # Skip if already in target status
+            if [[ "$CURRENT_STATUS" == "$TARGET_STATUS" ]]; then
+              echo "ℹ️ Ticket already in $TARGET_STATUS status"
+              return
+            fi
+          
+            # Get available transitions
+            TRANSITIONS=$(curl -s -u "${{ secrets.JIRA_API_TOKEN }}" \
+              "https://t-esp-asstagj.atlassian.net/rest/api/3/issue/$TICKET_ID/transitions")
+          
+            # Find transition ID
+            TRANSITION_ID=$(echo "$TRANSITIONS" | jq -r ".transitions[] | select(.to.name == \"$TARGET_STATUS\") | .id")
+          
+            if [[ -n "$TRANSITION_ID" && "$TRANSITION_ID" != "null" ]]; then
+              # Execute transition
+              TRANSITION_RESULT=$(curl -s -u "${{ secrets.JIRA_API_TOKEN }}" \
+                -H "Content-Type: application/json" \
+                -X POST \
+                -d "{\"transition\":{\"id\":\"$TRANSITION_ID\"}}" \
+                "https://t-esp-asstagj.atlassian.net/rest/api/3/issue/$TICKET_ID/transitions")
+          
+              # Create detailed history comment
+              TIMESTAMP=$(date -Iseconds)
+              COMMIT_SHA="${{ github.sha }}"
+              REPO="${{ github.repository }}"
+          
+              HISTORY_COMMENT="## 🤖 Automated Transition
+          
+          **Status Change**: $CURRENT_STATUS → $TARGET_STATUS  
+          **Trigger**: $EVENT_TYPE  
+          **Reason**: $REASON  
+          
+          ### 📋 Details:
+          - **Repository**: $REPO
+          - **Commit**: \`${COMMIT_SHA:0:8}\`
+          - **Timestamp**: $TIMESTAMP
+          - **Workflow**: ${{ github.workflow }}
+          
+          ### 🔄 Next Steps:
+          $(case "$TARGET_STATUS" in
+            "In Review") echo "- Code review required\n- PR will be created automatically\n- Testing on staging after merge";;
+            "Testing") echo "- QA testing on staging environment\n- Verify all acceptance criteria\n- Ready for production deployment";;
+            "Done") echo "- Feature deployed to production\n- Monitor for issues\n- Ticket complete";;
+            *) echo "- Follow standard process for $TARGET_STATUS";;
+          esac)
+          
+          ---
+          🎯 *Automated by GitHub Actions*"
+          
+              # Add history comment to Jira
+              curl -s -u "${{ secrets.JIRA_API_TOKEN }}" \
+                -H "Content-Type: application/json" \
+                -X POST \
+                -d "{\"body\":{\"content\":[{\"content\":[{\"text\":\"$HISTORY_COMMENT\",\"type\":\"text\"}],\"type\":\"paragraph\"}],\"type\":\"doc\",\"version\":1}}" \
+                "https://t-esp-asstagj.atlassian.net/rest/api/3/issue/$TICKET_ID/comment"
+          
+              # Log to deployment history
+              mkdir -p .github/jira-history
+              echo "$TIMESTAMP | $TICKET_ID | $CURRENT_STATUS → $TARGET_STATUS | $EVENT_TYPE | $REASON" >> .github/jira-history/$(date +%Y-%m).log
+          
+              echo "✅ $TICKET_ID: $CURRENT_STATUS → $TARGET_STATUS"
+          
+            else
+              echo "❌ Cannot transition $TICKET_ID to $TARGET_STATUS"
+              echo "Available transitions:"
+              echo "$TRANSITIONS" | jq -r '.transitions[] | "  \(.id): \(.name) → \(.to.name)"' 2>/dev/null || echo "Failed to parse transitions"
+          
+              # Log failed transition
+              mkdir -p .github/jira-history
+              echo "$(date -Iseconds) | $TICKET_ID | FAILED: $CURRENT_STATUS → $TARGET_STATUS | $EVENT_TYPE | $REASON" >> .github/jira-history/$(date +%Y-%m).log
+            fi
+          }
+          
+          # Process based on event type and branch
+          BRANCH=${GITHUB_REF#refs/heads/}
+          
+          case "${{ github.event_name }}" in
+            push)
+              case "$BRANCH" in
+                TEM-*)
+                  echo "🎯 Processing TEM branch push: $BRANCH"
+          
+                  # Get commit message for gitmoji detection
+                  COMMIT_MSG=$(git log -1 --format="%s")
+                  echo "💬 Commit: $COMMIT_MSG"
+          
+                  if [[ "$COMMIT_MSG" =~ (🚑|:ambulance:) ]]; then
+                    move_jira_ticket "$BRANCH" "Ready for Deploy" "Critical hotfix committed with 🚑" "push-hotfix"
+                  elif [[ "$COMMIT_MSG" =~ (✨|:sparkles:|🐛|:bug:|🚀|:rocket:|♻️|:recycle:|🎨|:art:|💄|:lipstick:|⚡|:zap:|🔧|:wrench:) ]]; then
+                    move_jira_ticket "$BRANCH" "In Review" "Development completed with gitmoji: $COMMIT_MSG" "push-feature"
+                  else
+                    echo "ℹ️ No actionable gitmoji found"
+                  fi
+                  ;;
+          
+                staging)
+                  echo "🎭 Processing staging deployment"
+          
+                  # Get tickets from recent merges
+                  RECENT_MERGES=$(git log --oneline -5 --merges --format="%s")
+                  TICKETS=$(echo "$RECENT_MERGES" | grep -oE 'from TEM-[0-9]+' | sed 's/from //' | sort | uniq)
+          
+                  for TICKET in $TICKETS; do
+                    move_jira_ticket "$TICKET" "Testing" "Deployed to staging environment for QA testing" "staging-deployment"
+                  done
+                  ;;
+          
+                main|master)
+                  echo "🚀 Processing production deployment"
+          
+                  # Get tickets from recent merges or staging content
+                  RECENT_MERGES=$(git log --oneline -3 --merges --format="%s")
+          
+                  # Try to get tickets from merge commits
+                  TICKETS=$(echo "$RECENT_MERGES" | grep -oE 'from TEM-[0-9]+' | sed 's/from //' | sort | uniq)
+          
+                  # If staging was merged, get tickets from staging
+                  if echo "$RECENT_MERGES" | grep -qi "staging"; then
+                    STAGING_TICKETS=$(git log staging --not main~1 --oneline --merges | grep -oE 'from TEM-[0-9]+' | sed 's/from //' | sort | uniq)
+                    TICKETS=$(echo -e "$TICKETS\n$STAGING_TICKETS" | grep -v '^$' | sort | uniq)
+                  fi
+          
+                  for TICKET in $TICKETS; do
+                    move_jira_ticket "$TICKET" "Done" "Successfully deployed to production environment" "production-deployment"
+                  done
+                  ;;
+              esac
+              ;;
+          
+            pull_request)
+              if [[ "${{ github.event.action }}" == "opened" ]]; then
+                echo "📝 PR opened - tracking for future transitions"
+          
+                # Extract ticket from branch name
+                PR_BRANCH="${{ github.head_ref }}"
+                if [[ "$PR_BRANCH" =~ ^TEM-[0-9]+$ ]]; then
+                  echo "🎫 Found TEM ticket in PR: $PR_BRANCH"
+          
+                  # Log PR creation
+                  mkdir -p .github/jira-history
+                  echo "$(date -Iseconds) | $PR_BRANCH | PR_OPENED | ${{ github.event.pull_request.base.ref }} | ${{ github.event.pull_request.title }}" >> .github/jira-history/$(date +%Y-%m).log
+                fi
+              fi
+              ;;
+          esac
