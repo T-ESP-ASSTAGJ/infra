@@ -27,6 +27,9 @@ on:
       DISCORD_WEBHOOK_URL:
         required: false
         description: 'Discord webhook URL for alerts'
+      GITHUB_TOKEN:
+        required: false
+        description: 'GitHub token for registry access'
     outputs:
       scan_results:
         description: 'Summary of scan results'
