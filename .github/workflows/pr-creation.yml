@@ -71,17 +71,6 @@ jobs:
           ### 💬 Latest Commit:
           \`$COMMIT_MSG\`
           
-          ### 📋 Review Checklist:
-          - [ ] Hotfix addresses the critical issue
-          - [ ] No regression introduced  
-          - [ ] Ready for immediate staging deployment
-          - [ ] Production deployment plan confirmed
-          
-          ### 🔄 Next Steps:
-          1. Review and approve immediately
-          2. Merge to staging for validation
-          3. Create production deployment PR
-          
           ---
           🤖 *Auto-created from critical commit in ${{ inputs.repository_name }}*"
           
@@ -94,17 +83,6 @@ jobs:
           ### 💬 Latest Commit:
           \`$COMMIT_MSG\`
           
-          ### 📋 Review Checklist:
-          - [ ] Code review completed
-          - [ ] Tests passing
-          - [ ] Documentation updated (if needed)
-          - [ ] Ready for staging deployment
-          
-          ### 🔄 Next Steps:
-          1. Review and approve
-          2. Merge to staging for QA testing
-          3. Deploy to production when ready
-          
           ---
           🤖 *Auto-created from gitmoji commit in ${{ inputs.repository_name }}*"
           
@@ -116,11 +94,6 @@ jobs:
           
           ### 💬 Latest Commit:
           \`$COMMIT_MSG\`
-          
-          ### 📋 Review Checklist:
-          - [ ] Code review completed
-          - [ ] Changes tested
-          - [ ] Ready for staging
           
           ---
           🤖 *Auto-created from commit in ${{ inputs.repository_name }}*"
