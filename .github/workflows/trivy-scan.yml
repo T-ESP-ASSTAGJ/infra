@@ -177,6 +177,35 @@ jobs:
           echo "GITHUB_TOKEN is present: ${{ secrets.GITHUB_TOKEN != '' }}"
           echo "GH_TOKEN is present: ${{ secrets.GH_TOKEN != '' }}"
 
+      - name: Debug registry authentication
+        run: |
+          echo "=== AUTHENTICATION DEBUG ==="
+          echo "Actor: ${{ github.actor }}"
+          echo "Image: ${{ inputs.image_name }}:${{ inputs.image_tag }}"
+          echo "GITHUB_TOKEN present: ${{ secrets.GITHUB_TOKEN != '' }}"
+          echo "GH_TOKEN present: ${{ secrets.GH_TOKEN != '' }}"
+
+          # Test login
+          echo "Testing registry login..."
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+          if [ $? -eq 0 ]; then
+            echo "✅ Registry login successful"
+
+            # Test image pull
+            echo "Testing image access..."
+            if docker pull "${{ inputs.image_name }}:${{ inputs.image_tag }}"; then
+              echo "✅ Image pull successful - proceeding with scan"
+            else
+              echo "❌ Image pull failed despite successful login"
+              echo "This suggests the image doesn't exist or permissions issue"
+              exit 1
+            fi
+          else
+            echo "❌ Registry login failed"
+            echo "Token length: ${{ length(secrets.GITHUB_TOKEN) }}"
+            exit 1
+          fi
       # Scan 2: Image Docker (si applicable)
       - name: Run Trivy image scan
         if: ${{ steps.detect.outputs.docker_project == 'true' && inputs.image_name != '' }}
