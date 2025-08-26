@@ -27,7 +27,7 @@ on:
       DISCORD_WEBHOOK_URL:
         required: false
         description: 'Discord webhook URL for alerts'
-      GITHUB_TOKEN:
+      GH_TOKEN:
         required: false
         description: 'GitHub token for registry access'
     outputs:
@@ -89,7 +89,7 @@ jobs:
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN || github.token }}
+          password: ${{ secrets.GH_TOKEN || github.token }}
 
       - name: Debug registry access
         if: ${{ inputs.image_name != '' }}
