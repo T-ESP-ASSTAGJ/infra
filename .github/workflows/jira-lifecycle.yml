@@ -1,18 +1,16 @@
 name: 🎫 Jira Ticket Lifecycle
 
 on:
-  push:
-    branches:
-      - 'TEM-*'
-      - 'staging'
-      - 'main'
-      - 'master'
-  pull_request:
-    types: [opened, closed]
-    branches:
-      - 'staging'
-      - 'main'
-      - 'master'
+  workflow_call:
+    inputs:
+      repository_name:
+        required: true
+        type: string
+        description: "Name of the repository (api, client, etc.)"
+    secrets:
+      JIRA_API_TOKEN:
+        required: true
+        description: "Jira API token"
 
 jobs:
   jira-lifecycle:
@@ -72,7 +70,7 @@ jobs:
               # Create detailed history comment
               TIMESTAMP=$(date -Iseconds)
               COMMIT_SHA="${{ github.sha }}"
-              REPO="${{ github.repository }}"
+              REPO="${{ inputs.repository_name }}"
           
               HISTORY_COMMENT="## 🤖 Automated Transition
           

@@ -1,11 +1,16 @@
 name: 🚀 PR Creation on Merge
 
 on:
-  push:
-    branches:
-      - 'staging'
-      - 'main'
-      - 'master'
+  workflow_call:
+    inputs:
+      repository_name:
+        required: true
+        type: string
+        description: "Name of the repository (api, client, etc.)"
+    secrets:
+      AUTO_DEPLOY_TOKEN:
+        required: true
+        description: "GitHub token with push/PR permissions"
 
 jobs:
   create-pr:
@@ -68,7 +73,7 @@ jobs:
           ### 🔄 Source:
           - **From**: staging
           - **Latest merge**: $SOURCE_BRANCH
-          - **Repository**: ${{ github.repository }}
+                            - **Repository**: ${{ inputs.repository_name }}
           
           ---
           🤖 *Auto-created when $SOURCE_BRANCH was merged to staging*"
@@ -126,7 +131,7 @@ jobs:
           $(echo "$DEPLOYED_TICKETS" | sed 's/^/- /')
           
           ## 📈 Deployment Stats:
-          - Repository: ${{ github.repository }}
+                          # Repository: ${{ inputs.repository_name }}
           - Branch: $CURRENT_BRANCH
           - Commit: ${GITHUB_SHA:0:8}
           
