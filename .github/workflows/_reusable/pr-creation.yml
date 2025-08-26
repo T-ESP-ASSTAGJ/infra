@@ -1,0 +1,138 @@
+name: 🚀 Auto PR Creation (Reusable)
+
+on:
+  workflow_call:
+    inputs:
+      repository_name:
+        required: true
+        type: string
+        description: "Name of the repository (infra, client, api)"
+      base_branch:
+        required: false
+        type: string
+        default: "staging"
+        description: "Base branch for PR creation"
+      reviewers:
+        required: false
+        type: string
+        description: "Comma-separated list of reviewers"
+      team_reviewers:
+        required: false
+        type: string
+        description: "Comma-separated list of team reviewers"
+    secrets:
+      AUTO_DEPLOY_TOKEN:
+        required: true
+        description: "GitHub token with push/PR permissions"
+
+jobs:
+  create-feature-pr:
+    runs-on: ubuntu-latest
+    if: github.ref != 'refs/heads/staging' && github.ref != 'refs/heads/main' && github.ref != 'refs/heads/master'
+
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.AUTO_DEPLOY_TOKEN }}
+
+      - name: Check for gitmoji in latest commit
+        id: gitmoji_check
+        run: |
+          COMMIT_MSG=$(git log -1 --format="%s")
+          echo "Latest commit: $COMMIT_MSG"
+          
+          # Check for gitmoji patterns (emoji or :text: format)
+          if [[ "$COMMIT_MSG" =~ (🚑|:ambulance:|✨|:sparkles:|🐛|:bug:|🚀|:rocket:|♻️|:recycle:|🎨|:art:|💄|:lipstick:|⚡|:zap:|🔧|:wrench:|📝|:memo:|🔥|:fire:|💚|:green_heart:|⬆️|:arrow_up:|⬇️|:arrow_down:|📌|:pushpin:|👷|:construction_worker:|📈|:chart_with_upwards_trend:|🔨|:hammer:|🎉|:tada:|🔒|:lock:|🔐|:closed_lock_with_key:|🔑|:key:|🏗️|:building_construction:|📦|:package:|🔖|:bookmark:|🚨|:rotating_light:|💡|:bulb:|🍻|:beers:|💬|:speech_balloon:|🗃️|:card_file_box:|🔊|:loud_sound:|🔇|:mute:|👥|:busts_in_silhouette:|🚸|:children_crossing:|📱|:iphone:|🤡|:clown_face:|🥅|:goal_net:|📸|:camera_flash:|⚗️|:alembic:|🔍|:mag:|🏷️|:label:|🌱|:seedling:|🚩|:triangular_flag_on_post:|💫|:dizzy:|🗑️|:wastebasket:|🛂|:passport_control:|🩹|:adhesive_bandage:|🧐|:monocle_face:|⚰️|:coffin:|🧪|:test_tube:|👔|:necktie:|🩺|:stethoscope:|🧱|:bricks:|🧑‍💻|:technologist:|💸|:money_with_wings:|🧵|:thread:|🦺|:safety_vest:) ]]; then
+            echo "has_gitmoji=true" >> $GITHUB_OUTPUT
+          
+            # Determine priority based on gitmoji
+            if [[ "$COMMIT_MSG" =~ (🚑|:ambulance:) ]]; then
+              echo "priority=critical" >> $GITHUB_OUTPUT
+            else
+              echo "priority=normal" >> $GITHUB_OUTPUT
+            fi
+          else
+            echo "has_gitmoji=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+      - name: Set repository-specific configurations
+        id: repo_config
+        run: |
+          REPO_NAME="${{ inputs.repository_name }}"
+          
+          case "$REPO_NAME" in
+            "infra")
+              echo "emoji=🏗️" >> $GITHUB_OUTPUT
+              echo "context=Infrastructure" >> $GITHUB_OUTPUT
+              ;;
+            "client")
+              echo "emoji=🖥️" >> $GITHUB_OUTPUT
+              echo "context=Frontend" >> $GITHUB_OUTPUT
+              ;;
+            "api")
+              echo "emoji=🔌" >> $GITHUB_OUTPUT
+              echo "context=Backend API" >> $GITHUB_OUTPUT
+              ;;
+            *)
+              echo "emoji=🔀" >> $GITHUB_OUTPUT
+              echo "context=Code" >> $GITHUB_OUTPUT
+              ;;
+          esac
+
+      - name: Create Pull Request
+        if: steps.gitmoji_check.outputs.has_gitmoji == 'true'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.AUTO_DEPLOY_TOKEN }}
+          branch: ${{ github.ref_name }}
+          base: ${{ inputs.base_branch }}
+          title: ${{ steps.gitmoji_check.outputs.priority == 'critical' && '🚑 HOTFIX:' || steps.repo_config.outputs.emoji }} ${{ github.ref_name }} - ${{ steps.repo_config.outputs.context }}
+          body: |
+            ## ${{ steps.gitmoji_check.outputs.priority == 'critical' && '🚨 Critical Hotfix' || format('{0} {1} Ready for Review', steps.repo_config.outputs.emoji, steps.repo_config.outputs.context) }}
+            
+            **Repository**: `${{ inputs.repository_name }}`  
+            **Ticket**: ${{ github.ref_name }}  
+            ${{ steps.gitmoji_check.outputs.priority == 'critical' && '**Priority**: Critical - Requires immediate review' || '' }}
+            
+            ### 📋 Changes
+            ```
+            ${{ github.event.head_commit.message }}
+            ```
+            
+            ### 🔍 Review Checklist
+            - [ ] Code follows project standards
+            - [ ] Tests added/updated as needed
+            - [ ] Documentation updated if required
+            ${{ steps.gitmoji_check.outputs.priority == 'critical' && '- [ ] Hotfix tested and verified' || '' }}
+            ${{ inputs.repository_name == 'infra' && '- [ ] Infrastructure changes reviewed for security' || '' }}
+            ${{ inputs.repository_name == 'client' && '- [ ] UI/UX changes tested across browsers' || '' }}
+            ${{ inputs.repository_name == 'api' && '- [ ] API changes backward compatible' || '' }}
+            
+            ### 📊 Repository Context
+            This PR affects the **${{ steps.repo_config.outputs.context }}** components of the system.
+            
+            ---
+            🤖 *Auto-created from gitmoji commit in `${{ inputs.repository_name }}` repository*
+          labels: |
+            ${{ steps.gitmoji_check.outputs.priority == 'critical' && 'hotfix' || 'feature' }}
+            automated-pr
+            ${{ inputs.repository_name }}
+            ${{ github.ref_name }}
+          reviewers: ${{ inputs.reviewers }}
+          team-reviewers: ${{ inputs.team_reviewers }}
+          draft: ${{ steps.gitmoji_check.outputs.priority != 'critical' }}
+
+      - name: Comment if no gitmoji
+        if: steps.gitmoji_check.outputs.has_gitmoji == 'false'
+        run: |
+          echo "ℹ️  No gitmoji found in commit message. Skipping PR creation."
+          echo "💡 Use gitmoji in your commit messages to auto-create PRs!"
+          echo "📖 Learn more: https://gitmoji.dev"
+          echo "🏗️ Repository: ${{ inputs.repository_name }}"

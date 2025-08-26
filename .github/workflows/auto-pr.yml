@@ -1,0 +1,15 @@
+name: 🏗️ Auto PR Creation (Infra)
+
+on:
+  push:
+    branches:
+      - 'TEM-*'
+
+jobs:
+  create-pr:
+    uses: T-ESP-ASSTAGJ/infra/.github/workflows/_reusable/pr-creation.yml@main
+    with:
+      repository_name: "infra"
+      base_branch: "staging"
+    secrets:
+      AUTO_DEPLOY_TOKEN: ${{ secrets.AUTO_DEPLOY_TOKEN }}

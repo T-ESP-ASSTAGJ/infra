@@ -6,7 +6,7 @@ on:
 
 jobs:
   discord-merge-notification:
-    uses: T-ESP-ASSTAGJ/infra/.github/workflows/discord-notification.yml@main
+    uses: T-ESP-ASSTAGJ/infra/.github/workflows/_reusable/discord-notification.yml@main
     with:
       repository_name: "infra"
       target_branch: ${{ github.ref_name }}
