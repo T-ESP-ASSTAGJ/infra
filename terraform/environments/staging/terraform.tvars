@@ -1,0 +1,18 @@
+# =============================================================================
+# STAGING ENVIRONMENT CONFIGURATION
+# =============================================================================
+
+# DigitalOcean Configuration
+do_token = ""
+
+# Project Configuration
+project_name = "jamly-staging"
+region      = "fra1"
+
+# VM Configuration - Staging Defaults
+vm_count     = 2                    # Start small for staging
+droplet_size = "s-1vcpu-2gb"        # Cost-effective for staging
+image       = "ubuntu-22-04-x64"
+
+# Network Configuration
+vpc_ip_range = "10.10.0.0/16"
