@@ -56,11 +56,9 @@ jobs:
           
                 # Determine PR type based on gitmoji
                 PR_TITLE="$COMMIT_MSG"
-                PR_LABELS="feature"
           
                 if [[ "$COMMIT_MSG" =~ (🚑|:ambulance:) ]]; then
                   PR_TITLE="🚑 HOTFIX: $COMMIT_MSG"
-                  PR_LABELS="hotfix,critical"
           
                   PR_BODY="## 🚨 CRITICAL HOTFIX
           
@@ -89,23 +87,9 @@ jobs:
           
                 elif [[ "$COMMIT_MSG" =~ (✨|:sparkles:|🐛|:bug:|🚀|:rocket:|♻️|:recycle:|🎨|:art:|💄|:lipstick:|⚡|:zap:|🔧|:wrench:) ]]; then
           
-                  # Determine specific feature type
-                  if [[ "$COMMIT_MSG" =~ (✨|:sparkles:) ]]; then
-                    PR_LABELS="feature,enhancement"
-                  elif [[ "$COMMIT_MSG" =~ (🐛|:bug:) ]]; then
-                    PR_LABELS="bugfix"
-                  elif [[ "$COMMIT_MSG" =~ (🚀|:rocket:) ]]; then
-                    PR_LABELS="performance"
-                  elif [[ "$COMMIT_MSG" =~ (♻️|:recycle:) ]]; then
-                    PR_LABELS="refactor"
-                  else
-                    PR_LABELS="improvement"
-                  fi
-          
                   PR_BODY="## 🚀 Feature Ready for Review
           
           **Ticket**: $CURRENT_BRANCH  
-          **Type**: $(echo $PR_LABELS | sed 's/,/ \& /')
           
           ### 💬 Latest Commit:
           \`$COMMIT_MSG\`
@@ -142,13 +126,12 @@ jobs:
           🤖 *Auto-created from commit in ${{ inputs.repository_name }}*"
                 fi
           
-                # Create the PR
+                # Create the PR without labels
                 gh pr create \
                   --title "$PR_TITLE" \
                   --body "$PR_BODY" \
                   --base staging \
-                  --head "$CURRENT_BRANCH" \
-                  --label "$PR_LABELS"
+                  --head "$CURRENT_BRANCH"
           
                 echo "✅ PR created: $CURRENT_BRANCH → staging"
           
@@ -191,7 +174,7 @@ jobs:
           ### 🔄 Source:
           - **From**: staging
           - **Latest merge**: $SOURCE_BRANCH
-                            - **Repository**: ${{ inputs.repository_name }}
+          - **Repository**: ${{ inputs.repository_name }}
           
           ---
           🤖 *Auto-created when $SOURCE_BRANCH was merged to staging*"
@@ -200,8 +183,7 @@ jobs:
                     --title "$PR_TITLE" \
                     --body "$PR_BODY" \
                     --base main \
-                    --head staging \
-                    --label "production,deployment"
+                    --head staging
           
                   echo "✅ Production deployment PR created"
           
@@ -249,7 +231,7 @@ jobs:
           $(echo "$DEPLOYED_TICKETS" | sed 's/^/- /')
           
           ## 📈 Deployment Stats:
-                          # Repository: ${{ inputs.repository_name }}
+          - Repository: ${{ inputs.repository_name }}
           - Branch: $CURRENT_BRANCH
           - Commit: ${GITHUB_SHA:0:8}
           
