@@ -59,6 +59,7 @@ jobs:
           version: v0.64.1
 
       # Créer config Trivy par défaut si elle n'existe pas
+      # Créer config Trivy par défaut si elle n'existe pas
       - name: Create default Trivy config
         if: ${{ !contains(inputs.trivy_config_file, '/') }}
         run: |
@@ -87,6 +88,15 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Debug registry access
+        if: ${{ inputs.image_name != '' }}
+        run: |
+          echo "🔍 Testing registry access..."
+          echo "Image: ${{ inputs.image_name }}:${{ inputs.image_tag }}"
+          echo "Actor: ${{ github.actor }}"
+          # Test d'accès
+          docker pull ${{ inputs.image_name }}:${{ inputs.image_tag }} && echo "✅ Image accessible" || echo "❌ Image not accessible"
 
       # Support pour d'autres registries si nécessaire
       - name: Login to Docker Hub
