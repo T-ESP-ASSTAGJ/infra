@@ -89,7 +89,7 @@ jobs:
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
-          password: ${{ secrets.GH_TOKEN || github.token }}
+          password: ${{ secrets.GH_TOKEN }}
 
       - name: Debug registry access
         if: ${{ inputs.image_name != '' }}
@@ -171,6 +171,12 @@ jobs:
           trivy-config: ${{ inputs.trivy_config_file }}
           format: 'sarif'
           output: 'trivy-fs-results.sarif'
+
+      - name: Debug token presence
+        run: |
+          echo "GITHUB_TOKEN is present: ${{ secrets.GITHUB_TOKEN != '' }}"
+          echo "GH_TOKEN is present: ${{ secrets.GH_TOKEN != '' }}"
+          echo "Length of GITHUB_TOKEN: ${{ length(secrets.GITHUB_TOKEN) }}"
 
       # Scan 2: Image Docker (si applicable)
       - name: Run Trivy image scan
