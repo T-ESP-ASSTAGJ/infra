@@ -43,6 +43,124 @@ jobs:
           echo "📊 Source branch: $SOURCE_BRANCH"
           
           case "$CURRENT_BRANCH" in
+            TEM-*)
+              # When pushing to TEM branch, create PR from TEM branch to staging
+              echo "🎯 Creating TEM → staging PR for: $CURRENT_BRANCH"
+          
+              # Check if PR already exists
+              if ! gh pr list --base staging --head "$CURRENT_BRANCH" --json number | jq -e '.[] | select(.number)' > /dev/null 2>&1; then
+          
+                # Get commit message for PR context
+                COMMIT_MSG=$(git log -1 --format="%s")
+                echo "💬 Latest commit: $COMMIT_MSG"
+          
+                # Determine PR type based on gitmoji
+                PR_TITLE="$COMMIT_MSG"
+                PR_LABELS="feature"
+          
+                if [[ "$COMMIT_MSG" =~ (🚑|:ambulance:) ]]; then
+                  PR_TITLE="🚑 HOTFIX: $COMMIT_MSG"
+                  PR_LABELS="hotfix,critical"
+          
+                  PR_BODY="## 🚨 CRITICAL HOTFIX
+          
+          **Ticket**: $CURRENT_BRANCH  
+          **Priority**: Critical - Requires immediate review
+          
+          ### 🔥 Issue:
+          This is a critical hotfix that needs urgent attention and deployment.
+          
+          ### 💬 Latest Commit:
+          \`$COMMIT_MSG\`
+          
+          ### 📋 Review Checklist:
+          - [ ] Hotfix addresses the critical issue
+          - [ ] No regression introduced  
+          - [ ] Ready for immediate staging deployment
+          - [ ] Production deployment plan confirmed
+          
+          ### 🔄 Next Steps:
+          1. Review and approve immediately
+          2. Merge to staging for validation
+          3. Create production deployment PR
+          
+          ---
+          🤖 *Auto-created from critical commit in ${{ inputs.repository_name }}*"
+          
+                elif [[ "$COMMIT_MSG" =~ (✨|:sparkles:|🐛|:bug:|🚀|:rocket:|♻️|:recycle:|🎨|:art:|💄|:lipstick:|⚡|:zap:|🔧|:wrench:) ]]; then
+          
+                  # Determine specific feature type
+                  if [[ "$COMMIT_MSG" =~ (✨|:sparkles:) ]]; then
+                    PR_LABELS="feature,enhancement"
+                  elif [[ "$COMMIT_MSG" =~ (🐛|:bug:) ]]; then
+                    PR_LABELS="bugfix"
+                  elif [[ "$COMMIT_MSG" =~ (🚀|:rocket:) ]]; then
+                    PR_LABELS="performance"
+                  elif [[ "$COMMIT_MSG" =~ (♻️|:recycle:) ]]; then
+                    PR_LABELS="refactor"
+                  else
+                    PR_LABELS="improvement"
+                  fi
+          
+                  PR_BODY="## 🚀 Feature Ready for Review
+          
+          **Ticket**: $CURRENT_BRANCH  
+          **Type**: $(echo $PR_LABELS | sed 's/,/ \& /')
+          
+          ### 💬 Latest Commit:
+          \`$COMMIT_MSG\`
+          
+          ### 📋 Review Checklist:
+          - [ ] Code review completed
+          - [ ] Tests passing
+          - [ ] Documentation updated (if needed)
+          - [ ] Ready for staging deployment
+          
+          ### 🔄 Next Steps:
+          1. Review and approve
+          2. Merge to staging for QA testing
+          3. Deploy to production when ready
+          
+          ---
+          🤖 *Auto-created from gitmoji commit in ${{ inputs.repository_name }}*"
+          
+                else
+                  # Generic PR for commits without recognized gitmoji
+                  PR_BODY="## 📝 Code Changes Ready
+          
+          **Ticket**: $CURRENT_BRANCH
+          
+          ### 💬 Latest Commit:
+          \`$COMMIT_MSG\`
+          
+          ### 📋 Review Checklist:
+          - [ ] Code review completed
+          - [ ] Changes tested
+          - [ ] Ready for staging
+          
+          ---
+          🤖 *Auto-created from commit in ${{ inputs.repository_name }}*"
+                fi
+          
+                # Create the PR
+                gh pr create \
+                  --title "$PR_TITLE" \
+                  --body "$PR_BODY" \
+                  --base staging \
+                  --head "$CURRENT_BRANCH" \
+                  --label "$PR_LABELS"
+          
+                echo "✅ PR created: $CURRENT_BRANCH → staging"
+          
+                # Log PR creation
+                mkdir -p .github/deployment-history
+                echo "$(date -Iseconds) | PR_CREATED | $CURRENT_BRANCH→staging | $COMMIT_MSG" >> .github/deployment-history/$(date +%Y-%m).log
+          
+              else
+                echo "ℹ️ PR already exists: $CURRENT_BRANCH → staging"
+              fi
+              ;;
+          
             staging)
               # When something merges to staging, create PR from staging to main
               echo "🎭 Creating staging → main PR"
