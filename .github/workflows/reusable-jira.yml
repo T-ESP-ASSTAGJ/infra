@@ -123,8 +123,8 @@ jobs:
               dataGet.transitions.forEach(transition => {
                 console.log(` - Transition ID: ${transition.id}, Name: ${transition.name}`);
                 
-                // Look for "In Review" transition (exact match)
-                if (transition.name === 'In Review') {
+                // Look for "submit work" transition (moves to In Review)
+                if (transition.name === 'submit work') {
                   targetTransition = transition;
                 }
               });
