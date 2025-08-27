@@ -20,6 +20,13 @@ on:
         required: true
         type: string
         description: "JIRA email for authentication"
+    secrets:
+      JIRA_API_TOKEN:
+        required: true
+        description: "JIRA API token"
+      AUTO_DEPLOY_TOKEN:
+        required: true
+        description: "GitHub token with PR permissions"
 
 jobs:
   fetch-issue-list:

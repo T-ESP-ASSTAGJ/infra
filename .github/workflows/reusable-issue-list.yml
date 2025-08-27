@@ -20,6 +20,13 @@ on:
         required: true
         type: string
         description: "JIRA email for authentication"
+    secrets:
+      JIRA_API_TOKEN:
+        required: true
+        description: "JIRA API token"
+      AUTO_DEPLOY_TOKEN:
+        required: true
+        description: "GitHub token with PR permissions"
 
 jobs:
   comment-issue-list:
@@ -284,10 +291,26 @@ jobs:
             }' > discord_payload.json
           
           # Send to Discord
+          # Send to Discord - use repository-specific webhook
+          case "${{ inputs.repository_name }}" in
+            "api")
+              WEBHOOK_URL="${{ secrets.PR_BACK_REMINDER_WEBHOOK_URL }}"
+              ;;
+            "client")
+              WEBHOOK_URL="${{ secrets.PR_FRONT_REMINDER_WEBHOOK_URL }}"
+              ;;
+            "infra")
+              WEBHOOK_URL="${{ secrets.PR_DEVOPS_REMINDER_WEBHOOK_URL }}"
+              ;;
+            *)
+              WEBHOOK_URL="${{ secrets.PR_BACK_REMINDER_WEBHOOK_URL }}"
+              ;;
+          esac
+
           HTTP_RESPONSE=$(curl -s -w "%{http_code}" \
                               -H "Content-Type: application/json" \
                               -d @discord_payload.json \
-                              "${{ secrets.DISCORD_WEBHOOK_URL }}")
+                              "${WEBHOOK_URL}")
           
           HTTP_CODE=${HTTP_RESPONSE: -3}
           
