@@ -196,7 +196,7 @@ jobs:
             const jiraUrl = process.env.JIRA_URL;
             const token = process.env.JIRA_TOKEN;
             const issues = process.env.ISSUES.split(',');
-            const auth = Buffer.from(process.env.JIRA_MAIL + ':' + token).toString('base64'); 
+            const auth = token; 
             const transitionName = process.env.TRANSITION_NAME;
 
             for (const issueKey of issues) {
