@@ -92,7 +92,7 @@ jobs:
           base: ${{ inputs.dev_branch }}
 
           delete-branch: true
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.AUTO_DEPLOY_TOKEN }}
 
           labels: |
             Staging
@@ -118,7 +118,7 @@ jobs:
           base: ${{ inputs.prod_branch }}
 
           delete-branch: true
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.AUTO_DEPLOY_TOKEN }}
 
           labels: |
             Ambulance
