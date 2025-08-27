@@ -104,7 +104,7 @@ jobs:
             // Jira
             const jiraUrl = process.env.JIRA_URL;
             const token = process.env.JIRA_TOKEN;
-            const auth = Buffer.from(process.env.JIRA_MAIL + ':' + token).toString('base64');
+            const auth = token;
             
             // Commit List
             const issues = process.env.ISSUES.split(',');
@@ -191,7 +191,7 @@ jobs:
 
             // Add translations section
             if (tradCommits.length > 0 && tradCommits[0] !== "") {
-              let translationList = `## 🌍 Nouvelle Traduction(s)\n`;
+              let translationList = `## 🌍 Nouvelle Traduction(s)\n`;auth
               let discordTranslationList = `\n🌍 Nouvelle Traduction(s):\n`;
 
               for (const commit of tradCommits) {
