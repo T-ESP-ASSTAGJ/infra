@@ -101,7 +101,7 @@ jobs:
             // Jira
             const jiraUrl = process.env.JIRA_URL;
             const token = process.env.JIRA_TOKEN;
-            const auth = token;
+            const auth = Buffer.from(process.env.JIRA_MAIL + ':' + token).toString('base64');
             
             // Commit List
             const issues = process.env.ISSUES.split(',');
