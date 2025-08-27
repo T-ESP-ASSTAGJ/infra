@@ -1,0 +1,303 @@
+name: 🔀 AutoPR CI (Reusable)
+
+on:
+  workflow_call:
+    inputs:
+      repository_name:
+        required: true
+        type: string
+        description: "Name of the repository (api, client, infra)"
+      dev_branch:
+        required: false
+        type: string
+        default: "staging"
+        description: "Development branch name"
+      prod_branch:
+        required: false
+        type: string
+        default: "main"
+        description: "Production branch name"
+      dev_tag:
+        required: false
+        type: string
+        default: "#STAGING"
+        description: "Tag to trigger dev PR"
+      prod_tag:
+        required: false
+        type: string
+        default: "#MASTER"
+        description: "Tag to trigger prod PR"
+      trad_tag:
+        required: false
+        type: string
+        default: "#TRAD"
+        description: "Tag to trigger translation PR"
+      reviewers:
+        required: false
+        type: string
+        default: ""
+        description: "Comma-separated list of reviewers"
+    secrets:
+      GITHUB_TOKEN:
+        required: true
+        description: "GitHub token with PR permissions"
+      DISCORD_WEBHOOK_URL:
+        required: true
+        description: "Discord webhook URL for notifications"
+
+jobs:
+  create-pull-request:
+    if: ${{ github.actor != 'dependabot[bot]' && github.actor != 'dependabot-preview[bot]' }}
+    runs-on: ubuntu-latest
+    name: Create Pull Request
+    steps:
+      - name: Clone the repository
+        uses: actions/checkout@v5
+
+      - name: Filter out @${{ github.actor }} from reviewers
+        id: filter-reviewers
+        run: |
+          REVIEWERS="${{ inputs.reviewers }}"
+          if [[ -n "$REVIEWERS" ]]; then
+            IFS=',' read -r -a reviewer_array <<< "$REVIEWERS"
+            FILTERED_REVIEWERS=""
+            for reviewer in "${reviewer_array[@]}"; do
+              if [[ "$reviewer" != "${{ github.actor }}" ]]; then
+                if [[ -z "$FILTERED_REVIEWERS" ]]; then
+                  FILTERED_REVIEWERS="$reviewer"
+                else
+                  FILTERED_REVIEWERS="$FILTERED_REVIEWERS,$reviewer"
+                fi
+              fi
+            done
+            echo "FILTERED_REVIEWERS=$FILTERED_REVIEWERS" >> $GITHUB_ENV
+          else
+            echo "FILTERED_REVIEWERS=" >> $GITHUB_ENV
+          fi
+
+      - name: Expose git commit data
+        uses: rlespinasse/git-commit-data-action@v1
+
+      - name: Create PR to `${{ inputs.dev_branch }}`
+        if: >-
+          contains(github.event.head_commit.message, inputs.dev_tag)  ||
+          contains(github.event.head_commit.message, inputs.prod_tag) ||
+          contains(github.event.head_commit.message, inputs.trad_tag)
+        id: create-dev-pr
+        uses: peter-evans/create-pull-request@v7
+        with:
+          author: ${{ env.GIT_COMMIT_COMMITTER }}
+          committer: ${{ env.GIT_COMMIT_COMMITTER }}
+          commit-message: ${{ github.event.head_commit.message }}
+
+          assignees: ${{ github.actor }}
+          reviewers: ${{ env.FILTERED_REVIEWERS }}
+
+          title: "${{ github.event.head_commit.message }} by @${{ github.actor }}"
+          body: "@${{ github.actor }} has created a Pull Request 🥳 !"
+          branch: ${{ github.ref }}
+          base: ${{ inputs.dev_branch }}
+
+          delete-branch: true
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+          labels: |
+            Staging
+            AutoPR
+
+      - name: Create PR to `${{ inputs.prod_branch }}`
+        if: >-
+          contains(github.event.head_commit.message, inputs.prod_tag) ||
+          contains(github.event.head_commit.message, inputs.trad_tag)
+        id: create-prod-pr
+        uses: peter-evans/create-pull-request@v7
+        with:
+          author: ${{ env.GIT_COMMIT_COMMITTER }}
+          committer: ${{ env.GIT_COMMIT_COMMITTER }}
+          commit-message: ${{ github.event.head_commit.message }}
+
+          assignees: ${{ github.actor }}
+          reviewers: ${{ env.FILTERED_REVIEWERS }}
+
+          title: "${{ github.event.head_commit.message }} by @${{ github.actor }}"
+          body: "@${{ github.actor }} has created a Pull Request 🥳 !"
+          branch: ${{ github.ref }}
+          base: ${{ inputs.prod_branch }}
+
+          delete-branch: true
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+          labels: |
+            Ambulance
+            AutoPR
+
+      - name: Send Ambulance Discord Notification
+        if: contains(github.event.head_commit.message, inputs.prod_tag)
+        run: |
+          # Create timestamp
+          TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%S.000Z)
+          
+          # Repository-specific colors
+          case "${{ inputs.repository_name }}" in
+            "api")
+              COLOR="3066993"      # Green
+              ;;
+            "client")
+              COLOR="15844367"     # Gold/Orange  
+              ;;
+            "infra")
+              COLOR="10181046"     # Purple
+              ;;
+            *)
+              COLOR="16711680"     # Red for ambulance
+              ;;
+          esac
+
+          # Build Discord payload for ambulance
+          jq -n \
+            --arg title "🚑 Nouvelle Ambulance !" \
+            --arg description "Nouvelle ambulance créée par **@${{ github.actor }}** 💪" \
+            --argjson color "${COLOR}" \
+            --arg repo_name "${{ inputs.repository_name }}" \
+            --arg author "${{ github.actor }}" \
+            --arg commit_msg "${{ github.event.head_commit.message }}" \
+            --arg timestamp "${TIMESTAMP}" \
+            '{
+              "embeds": [
+                {
+                  "title": $title,
+                  "description": $description,
+                  "color": $color,
+                  "fields": [
+                    {
+                      "name": "📦 Repository",
+                      "value": $repo_name,
+                      "inline": true
+                    },
+                    {
+                      "name": "👤 Author",
+                      "value": $author,
+                      "inline": true
+                    },
+                    {
+                      "name": "💬 Commit Message",
+                      "value": $commit_msg,
+                      "inline": false
+                    }
+                  ],
+                  "timestamp": $timestamp,
+                  "footer": {
+                    "text": "\($repo_name) • GitHub Actions",
+                    "icon_url": "https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png"
+                  }
+                }
+              ]
+            }' > discord_payload.json
+          
+          # Send to Discord
+          HTTP_RESPONSE=$(curl -s -w "%{http_code}" \
+                              -H "Content-Type: application/json" \
+                              -d @discord_payload.json \
+                              "${{ secrets.DISCORD_WEBHOOK_URL }}")
+          
+          HTTP_CODE=${HTTP_RESPONSE: -3}
+          
+          if [[ $HTTP_CODE -ge 200 && $HTTP_CODE -lt 300 ]]; then
+            echo "✅ Ambulance Discord notification sent successfully! (HTTP $HTTP_CODE)"
+          else
+            echo "❌ Failed to send ambulance Discord notification. HTTP Code: $HTTP_CODE"
+            echo "Response: ${HTTP_RESPONSE%???}"
+          fi
+
+      - name: Extract Email from Commit Message
+        if: contains(github.event.head_commit.message, inputs.trad_tag)
+        id: extract_email
+        run: |
+          echo "Commit message: ${{ github.event.head_commit.message }}"
+          email=$(echo "${{ github.event.head_commit.message }}" | grep -oP "[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}")
+          echo "Extracted email: $email"
+          echo "email=$email" >> $GITHUB_OUTPUT
+
+      - name: Send Translation Discord Notification
+        if: contains(github.event.head_commit.message, inputs.trad_tag)
+        run: |
+          # Create timestamp
+          TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%S.000Z)
+          
+          # Repository-specific colors
+          case "${{ inputs.repository_name }}" in
+            "api")
+              COLOR="3066993"      # Green
+              ;;
+            "client")
+              COLOR="15844367"     # Gold/Orange  
+              ;;
+            "infra")
+              COLOR="10181046"     # Purple
+              ;;
+            *)
+              COLOR="5793266"      # Blue for translation
+              ;;
+          esac
+
+          # Get extracted email or fallback to actor
+          EMAIL="${{ steps.extract_email.outputs.email }}"
+          if [[ -z "$EMAIL" ]]; then
+            EMAIL="@${{ github.actor }}"
+          fi
+
+          # Build Discord payload for translation
+          jq -n \
+            --arg title "🌐 Nouvelle Traduction !" \
+            --arg description "Nouvelle traduction créée par **${EMAIL}** 💪" \
+            --argjson color "${COLOR}" \
+            --arg repo_name "${{ inputs.repository_name }}" \
+            --arg email "${EMAIL}" \
+            --arg commit_msg "${{ github.event.head_commit.message }}" \
+            --arg timestamp "${TIMESTAMP}" \
+            '{
+              "embeds": [
+                {
+                  "title": $title,
+                  "description": $description,
+                  "color": $color,
+                  "fields": [
+                    {
+                      "name": "📦 Repository",
+                      "value": $repo_name,
+                      "inline": true
+                    },
+                    {
+                      "name": "👤 Translator",
+                      "value": $email,
+                      "inline": true
+                    },
+                    {
+                      "name": "💬 Commit Message",
+                      "value": $commit_msg,
+                      "inline": false
+                    }
+                  ],
+                  "timestamp": $timestamp,
+                  "footer": {
+                    "text": "\($repo_name) • GitHub Actions",
+                    "icon_url": "https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png"
+                  }
+                }
+              ]
+            }' > discord_trad_payload.json
+          
+          # Send to Discord
+          HTTP_RESPONSE=$(curl -s -w "%{http_code}" \
+                              -H "Content-Type: application/json" \
+                              -d @discord_trad_payload.json \
+                              "${{ secrets.DISCORD_WEBHOOK_URL }}")
+          
+          HTTP_CODE=${HTTP_RESPONSE: -3}
+          
+          if [[ $HTTP_CODE -ge 200 && $HTTP_CODE -lt 300 ]]; then
+            echo "✅ Translation Discord notification sent successfully! (HTTP $HTTP_CODE)"
+          else
+            echo "❌ Failed to send translation Discord notification. HTTP Code: $HTTP_CODE"
+            echo "Response: ${HTTP_RESPONSE%???}"
+          fi

@@ -1,0 +1,256 @@
+name: 🔷 JIRA CI (Reusable)
+
+on:
+  workflow_call:
+    inputs:
+      repository_name:
+        required: true
+        type: string
+        description: "Name of the repository (api, client, infra)"
+      issue_prefix:
+        required: false
+        type: string
+        default: "TEM"
+        description: "Issue prefix (e.g., TEM, LAY)"
+      jira_url:
+        required: true
+        type: string
+        description: "JIRA base URL"
+      jira_mail:
+        required: true
+        type: string
+        description: "JIRA email for authentication"
+    secrets:
+      JIRA_API_TOKEN:
+        required: true
+        description: "JIRA API token"
+      GITHUB_TOKEN:
+        required: true
+        description: "GitHub token with PR permissions"
+
+jobs:
+  fetch-issue-list:
+    if: ${{ github.actor != 'dependabot[bot]' && github.actor != 'dependabot-preview[bot]' }}
+    runs-on: ubuntu-latest
+    name: Fetch Issues from commits
+    outputs:
+      issue_list: ${{ steps.filter-issues.outputs.issue_list }}
+    steps:
+      - name: Create a list of all tickets found in commits
+        id: filter-issues
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const pull_number = context.issue.number;
+            let allCommits = [];
+            let page = 0;
+            let response = [];
+
+            do {
+              page++;
+              response = await github.rest.pulls.listCommits({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: pull_number,
+                per_page: 100,
+                page: page
+              });
+              allCommits = allCommits.concat(response.data);
+            } while (response.data.length > 0);
+
+            const issuePrefix = '${{ inputs.issue_prefix }}';
+            const regex = new RegExp(issuePrefix + '-\\d+', 'g');
+
+            const commitMessages = allCommits.map(commit => commit.commit.message);
+            const relevantMessages = commitMessages
+              .filter(message => !message.toLowerCase().includes('merge branch'))
+              .filter(message => !message.toLowerCase().includes(':construction:'))
+              .filter(message => !message.toLowerCase().includes('🚧'))
+              .flatMap(message => Array.from(message.matchAll(regex)))
+              .map(match => match[0]);
+
+            const uniqueIssueIDs = [...new Set(relevantMessages)];
+            core.setOutput('issue_list', uniqueIssueIDs.join(','));
+
+  transition-to-review: 
+    runs-on: ubuntu-latest
+    name: Transition to review
+    needs: fetch-issue-list
+    if: >-
+      github.event_name == 'pull_request' &&
+      (github.event.action == 'opened' || github.event.action == 'reopened' || github.event.action == 'synchronize') &&
+      needs.fetch-issue-list.outputs.issue_list &&
+      github.head_ref != 'staging' &&
+      github.head_ref != 'main'
+    steps:
+      - name: Transition issues to "In Review"
+        uses: actions/github-script@v7
+        env:
+          ISSUES: ${{ needs.fetch-issue-list.outputs.issue_list }}
+          JIRA_URL: ${{ inputs.jira_url }}
+          JIRA_MAIL: ${{ inputs.jira_mail }}
+          JIRA_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const jiraUrl = process.env.JIRA_URL;
+            const token = process.env.JIRA_TOKEN;
+            const issues = process.env.ISSUES.split(',');
+            const auth = Buffer.from(process.env.JIRA_MAIL + ':' + token).toString('base64'); 
+
+            for (const issueKey of issues) {
+              const url = `${jiraUrl}/rest/api/3/issue/${issueKey}/transitions`;
+              let targetTransition = null;
+
+              // Get Transitions
+              const responseGet = await fetch(url, {
+                method: 'GET',
+                headers: {
+                  'Authorization': `Basic ${auth}`,
+                  'Accept': 'application/json',
+                  'Content-Type': 'application/json'
+                }
+              });
+
+              if (!responseGet.ok) {
+                console.error(`[${issueKey}] Failed to fetch transitions for issue ${issueKey}: ${responseGet.statusText}`);
+                continue;
+              }
+  
+              const dataGet = await responseGet.json();
+              console.log(`[${issueKey}] Available transitions for issue ${issueKey}:`);
+              dataGet.transitions.forEach(transition => {
+                console.log(` - Transition ID: ${transition.id}, Name: ${transition.name}`);
+                
+                // Look for "In Review" or similar transition names
+                if (transition.name.toLowerCase().includes('review') || transition.name === 'In Review') {
+                  targetTransition = transition;
+                }
+              });
+              
+              // Transition issue
+              if (targetTransition) {
+                const responsePost = await fetch(url, {
+                  method: 'POST',
+                  headers: {
+                    "Authorization": `Basic ${auth}`,
+                    "Accept": "application/json",
+                    "Content-Type": "application/json"
+                  },
+                  body: JSON.stringify({
+                    transition: {
+                      id: targetTransition.id
+                    }
+                  })
+                });
+
+                if (!responsePost.ok) {
+                  console.error(`[${issueKey}] Failed to transition JIRA issue ${issueKey}: ${responsePost.statusText}`);
+                  continue;
+                }
+
+                console.log(`[${issueKey}] Successfully transitioned issue ${issueKey} to In Review`);
+              } else {
+                console.log(`[${issueKey}] No suitable transition found for issue ${issueKey}`);
+              }
+            }
+
+  transition-to-branch: 
+    runs-on: ubuntu-latest
+    name: Transition to branch
+    needs: fetch-issue-list
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.event.action == 'closed' &&
+      github.event.pull_request.merged == true &&
+      needs.fetch-issue-list.outputs.issue_list 
+    steps:
+      - name: Set transition target based on branch
+        id: set_transition
+        run: |
+          case "${{ github.base_ref }}" in
+            "staging")
+              echo "transition_name=Ready for Deploy" >> $GITHUB_OUTPUT
+              ;;
+            "main"|"master")
+              echo "transition_name=Done" >> $GITHUB_OUTPUT
+              ;;
+            *)
+              echo "transition_name=" >> $GITHUB_OUTPUT
+              ;;
+          esac
+
+      - name: Transition issues to "${{ steps.set_transition.outputs.transition_name }}"
+        if: steps.set_transition.outputs.transition_name != ''
+        uses: actions/github-script@v7
+        env:
+          ISSUES: ${{ needs.fetch-issue-list.outputs.issue_list }}
+          TRANSITION_NAME: ${{ steps.set_transition.outputs.transition_name }}
+          JIRA_URL: ${{ inputs.jira_url }}
+          JIRA_MAIL: ${{ inputs.jira_mail }}
+          JIRA_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const jiraUrl = process.env.JIRA_URL;
+            const token = process.env.JIRA_TOKEN;
+            const issues = process.env.ISSUES.split(',');
+            const auth = Buffer.from(process.env.JIRA_MAIL + ':' + token).toString('base64'); 
+            const transitionName = process.env.TRANSITION_NAME;
+
+            for (const issueKey of issues) {
+              const url = `${jiraUrl}/rest/api/3/issue/${issueKey}/transitions`;
+              let targetTransition = null;
+
+              // Get Transitions
+              const responseGet = await fetch(url, {
+                method: 'GET',
+                headers: {
+                  'Authorization': `Basic ${auth}`,
+                  'Accept': 'application/json',
+                  'Content-Type': 'application/json'
+                }
+              });
+
+              if (!responseGet.ok) {
+                console.error(`[${issueKey}] Failed to fetch transitions for issue ${issueKey}: ${responseGet.statusText}`);
+                continue;
+              }
+  
+              const dataGet = await responseGet.json();
+              console.log(`[${issueKey}] Available transitions for issue ${issueKey}:`);
+              dataGet.transitions.forEach(transition => {
+                console.log(` - Transition ID: ${transition.id}, Name: ${transition.name}`);
+                
+                if (transition.name === transitionName) {
+                  targetTransition = transition;
+                }
+              });
+              
+              // Transition issue
+              if (targetTransition) {
+                const responsePost = await fetch(url, {
+                  method: 'POST',
+                  headers: {
+                    "Authorization": `Basic ${auth}`,
+                    "Accept": "application/json",
+                    "Content-Type": "application/json"
+                  },
+                  body: JSON.stringify({
+                    transition: {
+                      id: targetTransition.id
+                    }
+                  })
+                });
+
+                if (!responsePost.ok) {
+                  console.error(`[${issueKey}] Failed to transition JIRA issue ${issueKey}: ${responsePost.statusText}`);
+                  continue;
+                }
+
+                console.log(`[${issueKey}] Successfully transitioned issue ${issueKey} to ${transitionName}`);
+              } else {
+                console.log(`[${issueKey}] No suitable transition found for issue ${issueKey}`);
+              }
+            }
