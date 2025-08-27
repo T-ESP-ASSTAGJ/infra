@@ -20,16 +20,6 @@ on:
         required: true
         type: string
         description: "JIRA email for authentication"
-    secrets:
-      JIRA_API_TOKEN:
-        required: true
-        description: "JIRA API token"
-      GITHUB_TOKEN:
-        required: true
-        description: "GitHub token with PR permissions"
-      DISCORD_WEBHOOK_URL:
-        required: true
-        description: "Discord webhook URL for notifications"
 
 jobs:
   comment-issue-list:
@@ -191,7 +181,7 @@ jobs:
 
             // Add translations section
             if (tradCommits.length > 0 && tradCommits[0] !== "") {
-              let translationList = `## 🌍 Nouvelle Traduction(s)\n`;auth
+              let translationList = `## 🌍 Nouvelle Traduction(s)\n`;
               let discordTranslationList = `\n🌍 Nouvelle Traduction(s):\n`;
 
               for (const commit of tradCommits) {

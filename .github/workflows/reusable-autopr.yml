@@ -37,13 +37,6 @@ on:
         type: string
         default: ""
         description: "Comma-separated list of reviewers"
-    secrets:
-      GITHUB_TOKEN:
-        required: true
-        description: "GitHub token with PR permissions"
-      DISCORD_WEBHOOK_URL:
-        required: true
-        description: "Discord webhook URL for notifications"
 
 jobs:
   create-pull-request:

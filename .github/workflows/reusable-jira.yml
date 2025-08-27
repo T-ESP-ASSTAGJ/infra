@@ -20,13 +20,6 @@ on:
         required: true
         type: string
         description: "JIRA email for authentication"
-    secrets:
-      JIRA_API_TOKEN:
-        required: true
-        description: "JIRA API token"
-      GITHUB_TOKEN:
-        required: true
-        description: "GitHub token with PR permissions"
 
 jobs:
   fetch-issue-list:
@@ -97,7 +90,7 @@ jobs:
             const jiraUrl = process.env.JIRA_URL;
             const token = process.env.JIRA_TOKEN;
             const issues = process.env.ISSUES.split(',');
-            const auth = token;
+            const auth = token; 
 
             for (const issueKey of issues) {
               const url = `${jiraUrl}/rest/api/3/issue/${issueKey}/transitions`;
