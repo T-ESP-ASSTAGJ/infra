@@ -123,8 +123,8 @@ jobs:
               dataGet.transitions.forEach(transition => {
                 console.log(` - Transition ID: ${transition.id}, Name: ${transition.name}`);
                 
-                // Look for "In Review" or similar transition names
-                if (transition.name.toLowerCase().includes('review') || transition.name === 'In Review') {
+                // Look for "In Review" transition (exact match)
+                if (transition.name === 'In Review') {
                   targetTransition = transition;
                 }
               });
@@ -171,7 +171,7 @@ jobs:
         run: |
           case "${{ github.base_ref }}" in
             "staging")
-              echo "transition_name=Ready for Deploy" >> $GITHUB_OUTPUT
+              echo "transition_name=To Deploy" >> $GITHUB_OUTPUT
               ;;
             "main"|"master")
               echo "transition_name=Done" >> $GITHUB_OUTPUT

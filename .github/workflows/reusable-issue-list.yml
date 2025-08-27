@@ -162,13 +162,13 @@ jobs:
                 const issueLink = `${jiraUrl}/browse/${issueKey}`;
                 const issueName = issueData.fields.summary;
 
-                // Skip completed issues for staging/master
-                const doneId = "10006";  // Adjust based on your JIRA setup
-                const testId = "10002";  // Adjust based on your JIRA setup
-                const toDeployId = "10027";  // Adjust based on your JIRA setup
+                // Skip completed issues for staging/main based on your JIRA status IDs
+                const doneStatusId = "10008";     // Done
+                const testingStatusId = "10011";  // Testing  
+                const toDeployStatusId = "10013"; // To Deploy
 
-                if (!(issueStatusId === doneId || 
-                    (targetBranch === 'staging' && (issueStatusId === testId || issueStatusId === toDeployId)))) {
+                if (!(issueStatusId === doneStatusId || 
+                    (targetBranch === 'staging' && (issueStatusId === testingStatusId || issueStatusId === toDeployStatusId)))) {
                     markdownList += `- [${issueKey}](${issueLink}) - ${issueName}\n`;
                     discordList += `• [${issueKey}](${issueLink}) - ${issueName}\n`;
                     issuesCount += 1;
