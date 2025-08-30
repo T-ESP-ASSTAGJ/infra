@@ -171,7 +171,7 @@ jobs:
         run: |
           case "${{ github.base_ref }}" in
             "staging")
-              echo "transition_name=validate" >> $GITHUB_OUTPUT
+              echo "transition_name=submit to validation" >> $GITHUB_OUTPUT
               ;;
             "main"|"master")
               echo "transition_name=in production" >> $GITHUB_OUTPUT
