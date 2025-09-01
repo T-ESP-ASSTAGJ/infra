@@ -1,0 +1,104 @@
+name: 🏗️ Infrastructure
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - staging
+          - production
+      action:
+        description: 'Action'
+        required: true
+        type: choice
+        options:
+          - plan
+          - apply
+          - destroy
+          - status
+      auto_approve:
+        description: 'Auto-approve (apply/destroy)'
+        required: false
+        type: boolean
+        default: false
+
+env:
+  TF_VAR_do_token: ${{ secrets.DO_TOKEN }}
+  TF_VAR_spaces_access_id: ${{ secrets.SPACES_ACCESS_ID }}
+  TF_VAR_spaces_secret_key: ${{ secrets.SPACES_SECRET_KEY }}
+
+jobs:
+  tofu:
+    runs-on: ubuntu-latest
+    name: OpenTofu ${{ inputs.action }}
+    environment: ${{ inputs.environment }}
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup OpenTofu
+        uses: opentofu/setup-opentofu@v1
+        with:
+          tofu_version: 1.8.5
+
+      - name: Init
+        working-directory: terraform/environments/${{ inputs.environment }}
+        run: tofu init
+
+      - name: Status
+        if: ${{ inputs.action == 'status' }}
+        working-directory: terraform/environments/${{ inputs.environment }}
+        run: |
+          echo "📊 Infrastructure Status:"
+          if tofu show -json > state.json 2>/dev/null; then
+            DROPLETS=$(jq -r '[.values.root_module.child_modules[]?.resources[]? | select(.type == "digitalocean_droplet")] | length' state.json)
+            echo "Active VMs: $DROPLETS"
+            if [[ $DROPLETS -gt 0 ]]; then
+              echo "VM Details:"
+              jq -r '.values.root_module.child_modules[]?.resources[]? | select(.type == "digitalocean_droplet") | "  - \(.values.name): \(.values.ipv4_address) (\(.values.size))"' state.json
+            fi
+          else
+            echo "No infrastructure deployed"
+          fi
+
+      - name: Plan
+        if: ${{ inputs.action == 'plan' || inputs.action == 'apply' }}
+        working-directory: terraform/environments/${{ inputs.environment }}
+        run: |
+          if [[ "${{ inputs.action }}" == "apply" ]]; then
+            tofu plan -out=tfplan
+          else
+            tofu plan
+          fi
+
+      - name: Plan Destroy
+        if: ${{ inputs.action == 'destroy' }}
+        working-directory: terraform/environments/${{ inputs.environment }}
+        run: tofu plan -destroy -out=destroy.tfplan
+
+      - name: Apply
+        if: ${{ inputs.action == 'apply' && inputs.auto_approve }}
+        working-directory: terraform/environments/${{ inputs.environment }}
+        run: tofu apply -auto-approve tfplan
+
+      - name: Destroy
+        if: ${{ inputs.action == 'destroy' && inputs.auto_approve }}
+        working-directory: terraform/environments/${{ inputs.environment }}
+        run: tofu apply -auto-approve destroy.tfplan
+
+      - name: Show Outputs
+        if: ${{ inputs.action == 'apply' && inputs.auto_approve }}
+        working-directory: terraform/environments/${{ inputs.environment }}
+        run: tofu output
+
+      - name: Manual Approval Required
+        if: ${{ (inputs.action == 'apply' || inputs.action == 'destroy') && !inputs.auto_approve }}
+        run: |
+          echo "⚠️ Manual approval required!"
+          echo "Re-run this workflow with 'Auto-approve' checked to proceed."
+          echo "Review the plan above before approving."
