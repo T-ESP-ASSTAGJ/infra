@@ -27,6 +27,15 @@ on:
       AUTO_DEPLOY_TOKEN:
         required: true
         description: "GitHub token with PR permissions"
+      PR_BACK_REMINDER_WEBHOOK_URL:
+        required:
+        description: "Discord Webhook URL for backend notifications"
+      PR_FRONT_REMINDER_WEBHOOK_URL:
+        required: true
+        description: "Discord Webhook URL for frontend notifications"
+      PR_DEVOPS_REMINDER_WEBHOOK_URL:
+        required: true
+        description: "Discord Webhook URL for devops notifications"
 
 jobs:
   comment-issue-list:
