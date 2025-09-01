@@ -1,11 +1,15 @@
 # =============================================================================
-# STAGING ENVIRONMENT CONFIGURATION
+# STAGING ENVIRONMENT CONFIGURATION - CREATE NEW PROJECT
 # =============================================================================
 
 # DigitalOcean Configuration
-do_token = ""
+do_token = ""  # Your DigitalOcean API token
 
-# Project Configuration
+# DigitalOcean Spaces Configuration (for remote state backend)
+spaces_access_id  = ""  # Your Spaces access key ID
+spaces_secret_key = ""  # Your Spaces secret access key
+
+# Project Configuration - WILL CREATE NEW PROJECT
 project_name = "jamly-staging"
 region      = "fra1"
 

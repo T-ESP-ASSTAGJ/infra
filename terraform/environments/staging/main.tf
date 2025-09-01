@@ -1,5 +1,5 @@
 # =============================================================================
-# STAGING ENVIRONMENT CONFIGURATION
+# STAGING ENVIRONMENT CONFIGURATION - CREATE NEW PROJECT FOR RESOURCES
 # =============================================================================
 
 terraform {
@@ -14,23 +14,21 @@ terraform {
       version = "~> 3.1"
     }
   }
-
-  # Using local backend (default)
-  # Add remote backend later when needed
 }
 
 # Provider configuration
 provider "digitalocean" {
   token = var.do_token
+  spaces_access_id  = var.spaces_access_id
+  spaces_secret_key = var.spaces_secret_key
 }
 
-# Call the VM module
 module "digitalocean_vm" {
   source = "../../modules/digitalocean-vm"
 
   # Project configuration
-  project_name = var.project_name
-  environment  = "staging"
+  project_name  = var.project_name
+  environment   = "staging"
 
   # Infrastructure settings
   region        = var.region
@@ -42,10 +40,10 @@ module "digitalocean_vm" {
   image         = var.image
 
   # Security
-  ssh_keys           = var.ssh_keys
+  ssh_keys      = var.ssh_keys
 
   # Features (staging-specific defaults)
-  enable_backups    = false  # Disabled for staging
+  enable_backups = false  # Disabled for staging to save costs
 }
 
 # Local variables for staging-specific configuration
