@@ -20,3 +20,16 @@ override.tf.json
 *.tfvars
 *.tfvars.json
 
+# Environment files with secrets
+.env
+.env.local
+.env.staging
+.env.production
+
+# Backup files
+*.backup
+*.bak
+
+# OS files
+.DS_Store
+Thumbs.db
