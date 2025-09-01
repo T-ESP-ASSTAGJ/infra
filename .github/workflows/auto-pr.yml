@@ -1,15 +1,26 @@
-name: 🏗️ Auto PR Creation (Infra)
+name: Issue List CI
+run-name: "📝 [${{ github.workflow }} #${{ github.run_number }}] ${{ github.head_ref }} by @${{ github.actor }}"
 
 on:
-  push:
+  pull_request:
+    types: [opened, reopened, synchronize, closed]
     branches:
-      - 'TEM-*'
+      - staging
+      - main
+      - production
+  workflow_dispatch:
 
 jobs:
-  create-pr:
-    uses: T-ESP-ASSTAGJ/infra/.github/workflows/reusable_pr-creation.yml@main
+  issue-list:
+    uses: T-ESP-ASSTAGJ/infra/.github/workflows/reusable-issue-list.yml@main
     with:
       repository_name: "infra"
-      base_branch: "staging"
+      issue_prefix: "TEM"
+      jira_url: "https://t-esp-asstagj.atlassian.net"
+      jira_mail: "jamly.pro@gmail.com"
     secrets:
+      JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
       AUTO_DEPLOY_TOKEN: ${{ secrets.AUTO_DEPLOY_TOKEN }}
+      PR_BACK_REMINDER_WEBHOOK_URL: ${{ secrets.PR_BACK_REMINDER_WEBHOOK_URL }}
+      PR_FRONT_REMINDER_WEBHOOK_URL: ${{ secrets.PR_FRONT_REMINDER_WEBHOOK_URL }}
+      PR_DEVOPS_REMINDER_WEBHOOK_URL: ${{ secrets.PR_DEVOPS_REMINDER_WEBHOOK_URL }}
