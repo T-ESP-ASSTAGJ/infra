@@ -1,3 +1,4 @@
+# .github/workflows/infrastructure.yml
 name: 🏗️ Infrastructure
 
 on:
@@ -39,7 +40,7 @@ jobs:
     runs-on: ubuntu-latest
     name: OpenTofu ${{ inputs.action }}
     environment: ${{ inputs.environment }}
-    
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -69,28 +70,15 @@ jobs:
             echo "No infrastructure deployed"
           fi
 
-      - name: Plan (Debug)
+      - name: Plan
         if: ${{ inputs.action == 'plan' || inputs.action == 'apply' }}
         working-directory: terraform/environments/${{ inputs.environment }}
-        timeout-minutes: 5
         run: |
-          echo "🔄 Starting plan with debug info..."
-          export TF_LOG=DEBUG
-          export TF_LOG_PATH=./terraform.log
-          
-          # Check if we can reach DO API
-          echo "Testing DigitalOcean API connectivity..."
-          curl -s -H "Authorization: Bearer $TF_VAR_do_token" "https://api.digitalocean.com/v2/account" | head -5
-          
-          echo "Running tofu plan..."
           if [[ "${{ inputs.action }}" == "apply" ]]; then
-            timeout 300 tofu plan -out=tfplan -no-color -detailed-exitcode || echo "Plan timed out or failed"
+            tofu plan -out=tfplan
           else
-            timeout 300 tofu plan -no-color -detailed-exitcode || echo "Plan timed out or failed"
+            tofu plan
           fi
-          
-          echo "Last 50 lines of terraform log:"
-          tail -50 terraform.log 2>/dev/null || echo "No log file found"
 
       - name: Plan Destroy
         if: ${{ inputs.action == 'destroy' }}
