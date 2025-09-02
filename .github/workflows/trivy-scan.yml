@@ -180,6 +180,83 @@ jobs:
           sarif_file: 'trivy-image-results.sarif'
           category: 'trivy-image'
 
+      - name: Analyze scan results
+        id: summary
+        run: |
+          echo "=== Analyzing scan results ==="
+      
+          CRITICAL_COUNT=0
+          HIGH_COUNT=0
+          MEDIUM_COUNT=0
+          LOW_COUNT=0
+      
+          FS_CRITICAL=0
+          FS_HIGH=0
+          FS_MEDIUM=0
+          FS_LOW=0
+          IMG_CRITICAL=0
+          IMG_HIGH=0
+          IMG_MEDIUM=0
+          IMG_LOW=0
+      
+          # Fichiers SARIF
+          for file in trivy-fs-results.sarif trivy-image-results.sarif; do
+            if [ -f "$file" ]; then
+              CRIT=$(jq '[.runs[].results[] | select(.properties.tags[]=="CRITICAL")] | length' "$file")
+              HIGH=$(jq '[.runs[].results[] | select(.properties.tags[]=="HIGH")] | length' "$file")
+              MED=$(jq '[.runs[].results[] | select(.properties.tags[]=="MEDIUM")] | length' "$file")
+              LOW=$(jq '[.runs[].results[] | select(.properties.tags[]=="LOW")] | length' "$file")
+      
+              CRITICAL_COUNT=$((CRITICAL_COUNT + CRIT))
+              HIGH_COUNT=$((HIGH_COUNT + HIGH))
+              MEDIUM_COUNT=$((MEDIUM_COUNT + MED))
+              LOW_COUNT=$((LOW_COUNT + LOW))
+      
+              if [[ "$file" == "trivy-fs-results.sarif" ]]; then
+                FS_CRITICAL=$CRIT
+                FS_HIGH=$HIGH
+                FS_MEDIUM=$MED
+                FS_LOW=$LOW
+              else
+                IMG_CRITICAL=$CRIT
+                IMG_HIGH=$HIGH
+                IMG_MEDIUM=$MED
+                IMG_LOW=$LOW
+              fi
+            fi
+          done
+      
+          TOTAL_VULNS=$((CRITICAL_COUNT + HIGH_COUNT + MEDIUM_COUNT + LOW_COUNT))
+          echo "Total vulnerabilities found: $TOTAL_VULNS (Critical: $CRITICAL_COUNT, High: $HIGH_COUNT, Medium: $MEDIUM_COUNT, Low: $LOW_COUNT)"
+      
+          # Préparer le résumé
+          SUMMARY="🔴 Critical: $CRITICAL_COUNT | 🟠 High: $HIGH_COUNT | 🟡 Medium: $MEDIUM_COUNT | 🟢 Low: $LOW_COUNT"
+          echo "results=$SUMMARY" >> $GITHUB_OUTPUT
+      
+          # Export pour Discord / PR
+          echo "critical_count=$CRITICAL_COUNT" >> $GITHUB_OUTPUT
+          echo "high_count=$HIGH_COUNT" >> $GITHUB_OUTPUT
+          echo "medium_count=$MEDIUM_COUNT" >> $GITHUB_OUTPUT
+          echo "low_count=$LOW_COUNT" >> $GITHUB_OUTPUT
+          echo "total_count=$TOTAL_VULNS" >> $GITHUB_OUTPUT
+          echo "fs_critical=$FS_CRITICAL" >> $GITHUB_OUTPUT
+          echo "fs_high=$FS_HIGH" >> $GITHUB_OUTPUT
+          echo "fs_medium=$FS_MEDIUM" >> $GITHUB_OUTPUT
+          echo "fs_low=$FS_LOW" >> $GITHUB_OUTPUT
+          echo "img_critical=$IMG_CRITICAL" >> $GITHUB_OUTPUT
+          echo "img_high=$IMG_HIGH" >> $GITHUB_OUTPUT
+          echo "img_medium=$IMG_MEDIUM" >> $GITHUB_OUTPUT
+          echo "img_low=$IMG_LOW" >> $GITHUB_OUTPUT
+      
+          # Déterminer s'il faut alerter
+          if [ $CRITICAL_COUNT -gt 0 ] || [ $HIGH_COUNT -gt 0 ]; then
+            echo "has_vulns=true" >> $GITHUB_OUTPUT
+            echo "Vulnerabilities found - alerts will be sent"
+          else
+            echo "has_vulns=false" >> $GITHUB_OUTPUT
+            echo "No critical/high vulnerabilities found"
+          fi
+           
       - name: Generate summary report
         run: |
           echo "# Security Scan Report" > scan-report.md
@@ -192,90 +269,10 @@ jobs:
           echo "- 🟡 Medium: ${{ steps.summary.outputs.medium_count }}" >> scan-report.md
           echo "- 📊 Total: ${{ steps.summary.outputs.total_count }}" >> scan-report.md
           echo "" >> scan-report.md
-
-          # Lien direct vers l’onglet Code scanning filtré sur la branche/PR actuelle
           echo "👉 [View full scan results in GitHub Security tab](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/security/code-scanning?query=ref%3A${GITHUB_REF_NAME})" >> scan-report.md
-
+          
           echo "--- DEBUG: scan-report.md content ---"
           cat scan-report.md
-
-          - name: Analyze scan results
-            id: summary
-            run: |
-              echo "=== Analyzing scan results ==="
-          
-              CRITICAL_COUNT=0
-              HIGH_COUNT=0
-              MEDIUM_COUNT=0
-              LOW_COUNT=0
-          
-              FS_CRITICAL=0
-              FS_HIGH=0
-              FS_MEDIUM=0
-              FS_LOW=0
-              IMG_CRITICAL=0
-              IMG_HIGH=0
-              IMG_MEDIUM=0
-              IMG_LOW=0
-          
-              # Fichiers SARIF
-              for file in trivy-fs-results.sarif trivy-image-results.sarif; do
-                if [ -f "$file" ]; then
-                  CRIT=$(jq '[.runs[].results[] | select(.properties.tags[]=="CRITICAL")] | length' "$file")
-                  HIGH=$(jq '[.runs[].results[] | select(.properties.tags[]=="HIGH")] | length' "$file")
-                  MED=$(jq '[.runs[].results[] | select(.properties.tags[]=="MEDIUM")] | length' "$file")
-                  LOW=$(jq '[.runs[].results[] | select(.properties.tags[]=="LOW")] | length' "$file")
-          
-                  CRITICAL_COUNT=$((CRITICAL_COUNT + CRIT))
-                  HIGH_COUNT=$((HIGH_COUNT + HIGH))
-                  MEDIUM_COUNT=$((MEDIUM_COUNT + MED))
-                  LOW_COUNT=$((LOW_COUNT + LOW))
-          
-                  if [[ "$file" == "trivy-fs-results.sarif" ]]; then
-                    FS_CRITICAL=$CRIT
-                    FS_HIGH=$HIGH
-                    FS_MEDIUM=$MED
-                    FS_LOW=$LOW
-                  else
-                    IMG_CRITICAL=$CRIT
-                    IMG_HIGH=$HIGH
-                    IMG_MEDIUM=$MED
-                    IMG_LOW=$LOW
-                  fi
-                fi
-              done
-          
-              TOTAL_VULNS=$((CRITICAL_COUNT + HIGH_COUNT + MEDIUM_COUNT + LOW_COUNT))
-              echo "Total vulnerabilities found: $TOTAL_VULNS (Critical: $CRITICAL_COUNT, High: $HIGH_COUNT, Medium: $MEDIUM_COUNT, Low: $LOW_COUNT)"
-          
-              # Préparer le résumé
-              SUMMARY="🔴 Critical: $CRITICAL_COUNT | 🟠 High: $HIGH_COUNT | 🟡 Medium: $MEDIUM_COUNT | 🟢 Low: $LOW_COUNT"
-              echo "results=$SUMMARY" >> $GITHUB_OUTPUT
-          
-              # Export pour Discord / PR
-              echo "critical_count=$CRITICAL_COUNT" >> $GITHUB_OUTPUT
-              echo "high_count=$HIGH_COUNT" >> $GITHUB_OUTPUT
-              echo "medium_count=$MEDIUM_COUNT" >> $GITHUB_OUTPUT
-              echo "low_count=$LOW_COUNT" >> $GITHUB_OUTPUT
-              echo "total_count=$TOTAL_VULNS" >> $GITHUB_OUTPUT
-              echo "fs_critical=$FS_CRITICAL" >> $GITHUB_OUTPUT
-              echo "fs_high=$FS_HIGH" >> $GITHUB_OUTPUT
-              echo "fs_medium=$FS_MEDIUM" >> $GITHUB_OUTPUT
-              echo "fs_low=$FS_LOW" >> $GITHUB_OUTPUT
-              echo "img_critical=$IMG_CRITICAL" >> $GITHUB_OUTPUT
-              echo "img_high=$IMG_HIGH" >> $GITHUB_OUTPUT
-              echo "img_medium=$IMG_MEDIUM" >> $GITHUB_OUTPUT
-              echo "img_low=$IMG_LOW" >> $GITHUB_OUTPUT
-          
-              # Déterminer s'il faut alerter
-              if [ $CRITICAL_COUNT -gt 0 ] || [ $HIGH_COUNT -gt 0 ]; then
-                echo "has_vulns=true" >> $GITHUB_OUTPUT
-                echo "Vulnerabilities found - alerts will be sent"
-              else
-                echo "has_vulns=false" >> $GITHUB_OUTPUT
-                echo "No critical/high vulnerabilities found"
-              fi
-           
 
       # Préparer le message Discord
       - name: Prepare Discord notification
@@ -321,11 +318,11 @@ jobs:
           PAYLOAD=$(jq -n \
           --arg title "🔒 Security Scan $STATUS" \
           --arg content "## Scan Summary\n
-          - 🔴 Critical: ${{ steps.summary.outputs.critical_count }}\n
-          - 🟠 High: ${{ steps.summary.outputs.high_count }}\n
-          - 🟡 Medium: ${{ steps.summary.outputs.medium_count }}\n
-          - 📊 Total: ${{ steps.summary.outputs.total_count }}\n
-          \n👉 [View full scan results in GitHub Security tab](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/security/code-scanning?query=ref%3A${GITHUB_REF_NAME})" \
+          - 🔴 Critical: ${{ steps.summary.outputs.critical_count }}
+          - 🟠 High: ${{ steps.summary.outputs.high_count }}
+          - 🟡 Medium: ${{ steps.summary.outputs.medium_count }}
+          - 📊 Total: ${{ steps.summary.outputs.total_count }}
+           👉 [View full scan results in GitHub Security tab](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/security/code-scanning?query=ref%3A${GITHUB_REF_NAME})" \
           '{embeds: [{title: $title, description: $content}]}' )
         
             curl -H "Content-Type: application/json" \
