@@ -302,7 +302,8 @@ jobs:
       - name: Send Discord Notification
         if: always()
         env:
-          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+          DISCORD_WEBHOOK: ${{ inputs.DISCORD_WEBHOOK_URL }}
+
         run: |
           STATUS="✅ Passed"
           if [ "${{ steps.summary.outputs.exit_code }}" != "0" ]; then
