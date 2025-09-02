@@ -12,18 +12,16 @@ env:
   AWS_ACCESS_KEY_ID: ${{ secrets.SPACES_ACCESS_ID }}
   AWS_SECRET_ACCESS_KEY: ${{ secrets.SPACES_SECRET_KEY }}
   AWS_EC2_METADATA_DISABLED: true
-
-permissions:
-  contents: read
+  GITHUB_TOKEN: ${{ secrets.AUTO_DEPLOY_TOKEN }}
 
 jobs:
   check-status:
     runs-on: ubuntu-latest
-    
+
     strategy:
       matrix:
         environment: [staging, production]
-    
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -84,7 +82,7 @@ jobs:
           
           # Update badge via GitHub API
           curl -X PATCH \
-            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Authorization: Bearer ${{ vars.GITHUB_TOKEN }}" \
             -H "Content-Type: application/json" \
             "https://api.github.com/gists/${{ vars.BADGE_GIST_ID }}" \
             -d @badge_payload.json

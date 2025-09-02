@@ -1,7 +1,7 @@
 # Infrastructure Management
 
-![Staging Infrastructure](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/T-ESP-ASSTAGJ/9456acba98dbfe7b61a6de718465fe0a/raw/infra-staging.json&logo=digitalocean)
-![Production Infrastructure](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/T-ESP-ASSTAGJ/[gist-id]/raw/infra-production.json&logo=digitalocean)
+![Staging Infrastructure](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/jamlypr/0d7fa0445df4861e8c8fcf9c82ae5b64/raw/infra-staging.json&logo=digitalocean)
+![Production Infrastructure](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/jamlypr/0d7fa0445df4861e8c8fcf9c82ae5b64/raw/infra-production.json&logo=digitalocean)
 
 This repository manages DigitalOcean infrastructure using OpenTofu (Terraform) and GitHub Actions.
 
