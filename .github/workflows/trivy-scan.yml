@@ -180,26 +180,25 @@ jobs:
           sarif_file: 'trivy-image-results.sarif'
           category: 'trivy-image'
 
-      - name: Generate human-readable report
+      - name: Generate summary report
         run: |
           echo "# Security Scan Report" > scan-report.md
           echo "" >> scan-report.md
           echo "## Scan Summary" >> scan-report.md
           echo "" >> scan-report.md
-          
-          # Filesystem scan summary
-          echo "### Filesystem Scan" >> scan-report.md
-          if [ -f "trivy-fs-results.sarif" ]; then
-            trivy fs . --format table --severity CRITICAL,HIGH,MEDIUM --exit-code 0 >> scan-report.md
-          fi
+
+          echo "- 🔴 Critical: ${{ steps.summary.outputs.critical_count }}" >> scan-report.md
+          echo "- 🟠 High: ${{ steps.summary.outputs.high_count }}" >> scan-report.md
+          echo "- 🟡 Medium: ${{ steps.summary.outputs.medium_count }}" >> scan-report.md
+          echo "- 📊 Total: ${{ steps.summary.outputs.total_count }}" >> scan-report.md
           echo "" >> scan-report.md
-          
-          # Image scan summary (si applicable)
-          if [ "${{ steps.detect.outputs.docker_project }}" == "true" ] && [ "${{ inputs.image_name }}" != "" ]; then
-            echo "### Docker Image Scan" >> scan-report.md
-              trivy image ${{ inputs.image_name }}:${{ inputs.image_tag }} --format table --severity CRITICAL,HIGH,MEDIUM --exit-code 0 >> scan-report.md
-            echo "" >> scan-report.md
-          fi
+
+          # Lien direct vers l’onglet Code scanning filtré sur la branche/PR actuelle
+          echo "👉 [View full scan results in GitHub Security tab](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/security/code-scanning?query=ref%3A${GITHUB_REF_NAME})" >> scan-report.md
+
+          echo "--- DEBUG: scan-report.md content ---"
+          cat scan-report.md
+      
 
       # Analyse des résultats pour alertes
       - name: Analyze scan results
@@ -300,128 +299,28 @@ jobs:
           echo "emoji=${EMOJI}" >> $GITHUB_OUTPUT
           echo "status=${STATUS}" >> $GITHUB_OUTPUT
 
-      # Notification Discord améliorée
-      - name: Send Discord notification
-        if: ${{ inputs.discord_webhook_url != '' }}
+      - name: Send Discord Notification
+        if: always()
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
         run: |
-          # Utiliser le webhook fourni en input ou en secret
-          WEBHOOK_URL="${{ inputs.discord_webhook_url }}"
-          if [[ -z "$WEBHOOK_URL" ]]; then
-            WEBHOOK_URL="${{ inputs.DISCORD_WEBHOOK_URL }}"
+          STATUS="✅ Passed"
+          if [ "${{ steps.summary.outputs.exit_code }}" != "0" ]; then
+            STATUS="❌ Failed"
           fi
-          
-          # Préparer les détails des scans
-          SCAN_DETAILS=""
-          if [[ "${{ steps.summary.outputs.fs_critical }}" != "0" ]] || [[ "${{ steps.summary.outputs.fs_high }}" != "0" ]] || [[ "${{ steps.summary.outputs.fs_medium }}" != "0" ]]; then
-            SCAN_DETAILS="${SCAN_DETAILS}📦 **Filesystem**: ${{ steps.summary.outputs.fs_critical }}🔴 ${{ steps.summary.outputs.fs_high }}🟠 ${{ steps.summary.outputs.fs_medium }}🟡\n"
-          fi
-          
-          if [[ "${{ steps.detect.outputs.docker_project }}" == "true" ]] && [[ "${{ inputs.image_name }}" != "" ]]; then
-            if [[ "${{ steps.summary.outputs.img_critical }}" != "0" ]] || [[ "${{ steps.summary.outputs.img_high }}" != "0" ]] || [[ "${{ steps.summary.outputs.img_medium }}" != "0" ]]; then
-              SCAN_DETAILS="${SCAN_DETAILS}🐳 **Docker Image**: ${{ steps.summary.outputs.img_critical }}🔴 ${{ steps.summary.outputs.img_high }}🟠 ${{ steps.summary.outputs.img_medium }}🟡\n"
-            fi
-          fi
-          
-          # Si pas de vulnérabilités, montrer quand même ce qui a été scanné
-          if [[ "${{ steps.summary.outputs.total_count }}" == "0" ]]; then
-            SCAN_DETAILS="✅ **All scans completed successfully**\n${{ steps.detect.outputs.scan_types }}"
-          fi
-          
-          # Créer timestamp
-          TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%S.000Z)
-          UNIX_TIMESTAMP=$(date +%s)
-          
-          # Construire le JSON avec jq pour éviter les problèmes d'échappement
-          jq -n \
-            --arg title "${{ steps.discord-prep.outputs.emoji }} ${{ steps.discord-prep.outputs.status }}" \
-            --arg description "${SCAN_DETAILS}" \
-            --argjson color "${{ steps.discord-prep.outputs.color }}" \
-            --arg repo "${{ github.repository }}" \
-            --arg repo_url "https://github.com/${{ github.repository }}" \
-            --arg branch "${{ github.ref_name }}" \
-            --arg commit_sha "${{ github.sha }}" \
-            --arg short_sha "${{ github.sha }}" \
-            --arg commit_url "https://github.com/${{ github.repository }}/commit/${{ github.sha }}" \
-            --arg action_url "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
-            --arg critical "${{ steps.summary.outputs.critical_count }}" \
-            --arg high "${{ steps.summary.outputs.high_count }}" \
-            --arg medium "${{ steps.summary.outputs.medium_count }}" \
-            --arg total "${{ steps.summary.outputs.total_count }}" \
-            --arg scan_count "${{ steps.detect.outputs.scan_count }}" \
-            --arg timestamp "${TIMESTAMP}" \
-            --argjson unix_timestamp "${UNIX_TIMESTAMP}" \
-            '{
-              "embeds": [
-                {
-                  "title": $title,
-                  "description": $description,
-                  "color": $color,
-                  "fields": [
-                    {
-                      "name": "📦 Repository",
-                      "value": "[\($repo)](\($repo_url))",
-                      "inline": true
-                    },
-                    {
-                      "name": "🌿 Branch",
-                      "value": "`\($branch)`",
-                      "inline": true
-                    },
-                    {
-                      "name": "🔍 Scans Performed",
-                      "value": "\($scan_count) scan types",
-                      "inline": true
-                    },
-                    {
-                      "name": "🔴 Critical",
-                      "value": $critical,
-                      "inline": true
-                    },
-                    {
-                      "name": "🟠 High",
-                      "value": $high,
-                      "inline": true
-                    },
-                    {
-                      "name": "🟡 Medium",
-                      "value": $medium,
-                      "inline": true
-                    },
-                    {
-                      "name": "📊 Total Vulnerabilities",
-                      "value": $total,
-                      "inline": false
-                    },
-                    {
-                      "name": "🔗 Actions",
-                      "value": "[View Scan Results](\($action_url)) • [View Commit](\($commit_url))",
-                      "inline": false
-                    }
-                  ],
-                  "timestamp": $timestamp,
-                  "footer": {
-                    "text": "Trivy Security Scanner • \($repo)",
-                    "icon_url": "https://raw.githubusercontent.com/aquasecurity/trivy/main/docs/imgs/logo.png"
-                  }
-                }
-              ]
-            }' > discord_payload.json
-          
-          # Envoyer à Discord
-          HTTP_RESPONSE=$(curl -s -w "%{http_code}" \
-                              -H "Content-Type: application/json" \
-                              -d @discord_payload.json \
-                              "${WEBHOOK_URL}")
-          
-          HTTP_CODE=${HTTP_RESPONSE: -3}
-          
-          if [[ $HTTP_CODE -ge 200 && $HTTP_CODE -lt 300 ]]; then
-            echo "✅ Discord security notification sent successfully! (HTTP $HTTP_CODE)"
-          else
-            echo "❌ Failed to send Discord notification. HTTP Code: $HTTP_CODE"
-            echo "Response: ${HTTP_RESPONSE%???}"
-            exit 1
-          fi
+          PAYLOAD=$(jq -n \
+          --arg title "🔒 Security Scan $STATUS" \
+          --arg content "## Scan Summary\n
+          - 🔴 Critical: ${{ steps.summary.outputs.critical_count }}\n
+          - 🟠 High: ${{ steps.summary.outputs.high_count }}\n
+          - 🟡 Medium: ${{ steps.summary.outputs.medium_count }}\n
+          - 📊 Total: ${{ steps.summary.outputs.total_count }}\n
+          \n👉 [View full scan results in GitHub Security tab](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/security/code-scanning?query=ref%3A${GITHUB_REF_NAME})" \
+          '{embeds: [{title: $title, description: $content}]}' )
+        
+            curl -H "Content-Type: application/json" \
+                 -d "$PAYLOAD" \
+                 $DISCORD_WEBHOOK
 
       # Upload des artifacts pour consultation
       - name: Upload scan artifacts
