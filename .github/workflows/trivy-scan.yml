@@ -190,14 +190,14 @@ jobs:
           # Filesystem scan summary
           echo "### Filesystem Scan" >> scan-report.md
           if [ -f "trivy-fs-results.sarif" ]; then
-            trivy fs . --format table --severity CRITICAL,HIGH,MEDIUM >> scan-report.md 2>/dev/null || echo "No vulnerabilities found in filesystem" >> scan-report.md
+            trivy fs . --format table --severity CRITICAL,HIGH,MEDIUM --exit-code 0 >> scan-report.md
           fi
           echo "" >> scan-report.md
           
           # Image scan summary (si applicable)
           if [ "${{ steps.detect.outputs.docker_project }}" == "true" ] && [ "${{ inputs.image_name }}" != "" ]; then
             echo "### Docker Image Scan" >> scan-report.md
-            trivy image ${{ inputs.image_name }}:${{ inputs.image_tag }} --format table --severity CRITICAL,HIGH,MEDIUM >> scan-report.md 2>/dev/null || echo "No vulnerabilities found in image" >> scan-report.md
+              trivy image ${{ inputs.image_name }}:${{ inputs.image_tag }} --format table --severity CRITICAL,HIGH,MEDIUM --exit-code 0 >> scan-report.md
             echo "" >> scan-report.md
           fi
 
@@ -302,7 +302,7 @@ jobs:
 
       # Notification Discord améliorée
       - name: Send Discord notification
-        if: ${{ (github.event_name == 'schedule') && (inputs.discord_webhook_url != '' || inputs.DISCORD_WEBHOOK_URL != '') }}
+        if: ${{ inputs.discord_webhook_url != '' || secrets.DISCORD_WEBHOOK_URL != '' }}
         run: |
           # Utiliser le webhook fourni en input ou en secret
           WEBHOOK_URL="${{ inputs.discord_webhook_url }}"
