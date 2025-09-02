@@ -12,7 +12,9 @@ env:
   AWS_ACCESS_KEY_ID: ${{ secrets.SPACES_ACCESS_ID }}
   AWS_SECRET_ACCESS_KEY: ${{ secrets.SPACES_SECRET_KEY }}
   AWS_EC2_METADATA_DISABLED: true
-  GITHUB_TOKEN: ${{ secrets.AUTO_DEPLOY_TOKEN }}
+
+permissions:
+  contents: read
 
 jobs:
   check-status:
@@ -82,7 +84,7 @@ jobs:
           
           # Update badge via GitHub API
           curl -X PATCH \
-            -H "Authorization: Bearer ${{ vars.GITHUB_TOKEN }}" \
+            -H "Authorization: Bearer ${{ secrets.AUTO_DEPLOY_TOKEN }}" \
             -H "Content-Type: application/json" \
             "https://api.github.com/gists/${{ vars.BADGE_GIST_ID }}" \
             -d @badge_payload.json
