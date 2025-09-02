@@ -302,7 +302,7 @@ jobs:
 
       # Notification Discord améliorée
       - name: Send Discord notification
-        if: ${{ inputs.discord_webhook_url != '' || secrets.DISCORD_WEBHOOK_URL != '' }}
+        if: ${{ inputs.discord_webhook_url != '' }}
         run: |
           # Utiliser le webhook fourni en input ou en secret
           WEBHOOK_URL="${{ inputs.discord_webhook_url }}"
