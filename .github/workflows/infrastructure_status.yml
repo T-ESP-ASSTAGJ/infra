@@ -13,6 +13,9 @@ env:
   AWS_SECRET_ACCESS_KEY: ${{ secrets.SPACES_SECRET_KEY }}
   AWS_EC2_METADATA_DISABLED: true
 
+permissions:
+  contents: read
+
 jobs:
   check-status:
     runs-on: ubuntu-latest
@@ -68,15 +71,20 @@ jobs:
             MESSAGE="offline"
           fi
           
+          # Create properly escaped JSON
+          cat > badge_payload.json << EOF
+          {
+            "files": {
+              "infra-${{ matrix.environment }}.json": {
+                "content": "{\"schemaVersion\": 1, \"label\": \"${{ matrix.environment }}\", \"message\": \"${MESSAGE}\", \"color\": \"${COLOR}\"}"
+              }
+            }
+          }
+          EOF
+          
           # Update badge via GitHub API
           curl -X PATCH \
-            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
             -H "Content-Type: application/json" \
             "https://api.github.com/gists/${{ vars.BADGE_GIST_ID }}" \
-            -d '{
-              "files": {
-                "infra-${{ matrix.environment }}.json": {
-                  "content": "{\"schemaVersion\": 1, \"label\": \"${{ matrix.environment }}\", \"message\": \"'${MESSAGE}'\", \"color\": \"'${COLOR}'\"}"
-                }
-              }
-            }'
+            -d @badge_payload.json
