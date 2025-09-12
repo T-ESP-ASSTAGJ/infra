@@ -23,6 +23,10 @@ on:
         required: false
         type: string
         description: 'Discord webhook URL for alerts'
+      custom_message:
+        required: false
+        type: string
+        description: 'Custom message to display in notifications (e.g., project name and branch)'
     secrets:
       DISCORD_WEBHOOK_URL:
         required: false
@@ -303,28 +307,40 @@ jobs:
           echo "status=${STATUS}" >> $GITHUB_OUTPUT
 
       - name: Send Discord Notification
-        if: always()
+        if: always() && steps.summary.outputs.critical_count > 0
         env:
-          DISCORD_WEBHOOK: ${{ inputs.DISCORD_WEBHOOK_URL || secrets.DISCORD_WEBHOOK_URL }}
-
+          DISCORD_WEBHOOK: ${{ inputs.discord_webhook_url || secrets.DISCORD_WEBHOOK_URL }}
         run: |
-          STATUS="✅ Passed"
-          if [ "${{ steps.summary.outputs.exit_code }}" != "0" ]; then
-            STATUS="❌ Failed"
+          if [ -z "$DISCORD_WEBHOOK" ]; then
+            echo "No Discord webhook configured, skipping notification"
+            exit 0
           fi
+
+          STATUS="✅ Passed"
+          if [ "${{ steps.summary.outputs.has_vulns }}" == "true" ]; then
+            STATUS="⚠️ Vulnerabilities Found"
+          fi
+          
+          # Message personnalisé s'il est fourni
+          CUSTOM_MSG=""
+          if [ -n "${{ inputs.custom_message }}" ]; then
+            CUSTOM_MSG="**${{ inputs.custom_message }}**\n\n"
+          fi
+          
           PAYLOAD=$(jq -n \
-          --arg title "🔒 Security Scan $STATUS" \
-          --arg content "## Scan Summary\n
+            --arg title "🔒 Security Scan $STATUS" \
+            --arg content "${CUSTOM_MSG}## Scan Summary
           - 🔴 Critical: ${{ steps.summary.outputs.critical_count }}
           - 🟠 High: ${{ steps.summary.outputs.high_count }}
           - 🟡 Medium: ${{ steps.summary.outputs.medium_count }}
           - 📊 Total: ${{ steps.summary.outputs.total_count }}
-           👉 [View full scan results in GitHub Security tab](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/security/code-scanning?query=ref%3A${GITHUB_REF_NAME})" \
-          '{embeds: [{title: $title, description: $content}]}' )
-        
-            curl -H "Content-Type: application/json" \
-                 -d "$PAYLOAD" \
-                 $DISCORD_WEBHOOK
+          
+          👉 [View full scan results in GitHub Security tab](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/security/code-scanning?query=ref%3A${GITHUB_REF_NAME})" \
+            '{embeds: [{title: $title, description: $content, color: ${{ steps.discord-prep.outputs.color }}}]}' )
+          
+          curl -H "Content-Type: application/json" \
+               -d "$PAYLOAD" \
+               "$DISCORD_WEBHOOK"
 
       # Upload des artifacts pour consultation
       - name: Upload scan artifacts
@@ -357,3 +373,9 @@ jobs:
             } catch (error) {
               console.log('Could not read or post scan report:', error);
             }
+      - name: Fail on critical vulnerabilities
+        if: steps.summary.outputs.critical_count > 0
+        run: |
+            echo "::error::Critical vulnerabilities found: ${{ steps.summary.outputs.critical_count }}"
+            echo "Security scan failed due to critical vulnerabilities. Please fix them before merging."
+            exit 1
