@@ -1,0 +1,18 @@
+---
+- name: Update apt cache
+  ansible.builtin.apt:
+    update_cache: yes
+    cache_valid_time: 3600
+  retries: 3
+  delay: 5
+
+- name: Install common packages
+  ansible.builtin.apt:
+    name: "{{ common_packages }}"
+    state: present
+
+- name: Upgrade all packages
+  ansible.builtin.apt:
+    upgrade: safe
+    autoremove: yes
+    autoclean: yes
