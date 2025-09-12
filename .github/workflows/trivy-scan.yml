@@ -324,12 +324,12 @@ jobs:
           # Message personnalisé s'il est fourni
           CUSTOM_MSG=""
           if [ -n "${{ inputs.custom_message }}" ]; then
-            CUSTOM_MSG="**${{ inputs.custom_message }}**\n\n"
+            CUSTOM_MSG="**${{ inputs.custom_message }}**"
           fi
           
           PAYLOAD=$(jq -n \
             --arg title "🔒 Security Scan $STATUS" \
-            --arg content "${CUSTOM_MSG}## Scan Summary
+            --arg content "${CUSTOM_MSG}
           - 🔴 Critical: ${{ steps.summary.outputs.critical_count }}
           - 🟠 High: ${{ steps.summary.outputs.high_count }}
           - 🟡 Medium: ${{ steps.summary.outputs.medium_count }}
