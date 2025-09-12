@@ -164,6 +164,28 @@ jobs:
           trivy-config: ${{ inputs.trivy_config_file }}
           format: 'sarif'
           output: 'trivy-image-results.sarif'
+      # À ajouter après les scans SARIF existants
+
+      # Scan filesystem pour JSON (analyse des vulnérabilités)
+      - name: Run Trivy filesystem scan (JSON)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          trivy-config: ${{ inputs.trivy_config_file }}
+          format: 'json'
+          output: 'trivy-fs-results.json'
+
+      # Scan image pour JSON (analyse des vulnérabilités)
+      - name: Run Trivy image scan (JSON)
+        if: ${{ steps.detect.outputs.docker_project == 'true' && inputs.image_name != '' }}
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: 'image'
+          image-ref: '${{ inputs.image_name }}:${{ inputs.image_tag }}'
+          trivy-config: ${{ inputs.trivy_config_file }}
+          format: 'json'
+          output: 'trivy-image-results.json'
 
       # Upload des résultats vers GitHub Security
       - name: Upload filesystem scan results
