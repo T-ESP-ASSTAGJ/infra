@@ -1,6 +1,6 @@
 # infra/.github/workflows/trivy-scan.yml
 
-name: Trivy Security Pipeline Scan
+name: Trivy Security Scan
 
 on:
   workflow_call:
