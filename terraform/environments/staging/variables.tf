@@ -78,7 +78,7 @@ variable "image" {
 }
 
 variable "ssh_keys" {
-  description = "SSH keys to add to droplets"
-  type        = list(string)
+  description = "SSH keys ids to add to droplets"
+  type        = list(number)
   default     = []
 }

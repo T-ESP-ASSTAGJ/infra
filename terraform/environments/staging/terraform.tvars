@@ -2,21 +2,16 @@
 # STAGING ENVIRONMENT CONFIGURATION - CREATE NEW PROJECT
 # =============================================================================
 
-# DigitalOcean Configuration
-do_token = ""  # Your DigitalOcean API token
-
-# DigitalOcean Spaces Configuration (for remote state backend)
-spaces_access_id  = ""  # Your Spaces access key ID
-spaces_secret_key = ""  # Your Spaces secret access key
-
 # Project Configuration - WILL CREATE NEW PROJECT
-project_name = "jamly-staging"
+project_name = "jamly"
 region      = "fra1"
 
 # VM Configuration - Staging Defaults
-vm_count     = 2                    # Start small for staging
-droplet_size = "s-1vcpu-2gb"        # Cost-effective for staging
+vm_count     = 2
+droplet_size = "s-1vcpu-2gb"
 image       = "ubuntu-22-04-x64"
 
 # Network Configuration
 vpc_ip_range = "10.10.0.0/16"
+
+ssh_keys = [50645784]

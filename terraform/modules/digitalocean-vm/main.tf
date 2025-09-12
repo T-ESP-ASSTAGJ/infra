@@ -87,7 +87,7 @@ resource "digitalocean_droplet" "vm" {
   ipv6     = var.enable_ipv6
 
   # SSH keys
-  ssh_keys = length(var.ssh_keys) > 0 ? data.digitalocean_ssh_keys.existing[0].ssh_keys[*].id : []
+  ssh_keys = var.ssh_keys
 
   # Features
   backups    = var.enable_backups

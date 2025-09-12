@@ -1,0 +1,10 @@
+---
+# Variables specific to production environment
+
+# Production-specific settings
+environment_name: production
+log_level: warn
+
+# Strict security for production
+allow_password_auth: false
+enable_fail2ban: true

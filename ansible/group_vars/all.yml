@@ -1,0 +1,16 @@
+---
+# Global variables for all VMs
+
+# Common packages for all environments
+common_packages:
+  - curl
+  - wget
+  - git
+  - htop
+  - vim
+
+# Firewall rules for all VMs
+common_firewall_rules:
+  - '22'   # SSH
+  - '80'   # HTTP
+  - '443'  # HTTPS
