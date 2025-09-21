@@ -1,0 +1,6 @@
+environment   = "staging"
+app_secret    = "yeahman"
+
+# Docker image tags - use specific versions for production
+api_image_tag = "staging-latest"
+web_image_tag = "staging"
