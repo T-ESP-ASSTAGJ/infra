@@ -1,7 +1,6 @@
 # =============================================================================
 # DIGITAL OCEAN APP PLATFORM - TWO SERVICES (API + WEB)
 # =============================================================================
-
 terraform {
   required_providers {
     digitalocean = {
@@ -16,9 +15,8 @@ provider "digitalocean" {
 }
 
 # =============================================================================
-# APP PLATFORM WITH TWO SEPARATE SERVICES
+# DATABASE
 # =============================================================================
-
 resource "digitalocean_database_cluster" "postgres" {
   name       = "jamly-postgres-${var.environment}"
   engine     = "pg"
@@ -32,6 +30,9 @@ resource "digitalocean_database_cluster" "postgres" {
   }
 }
 
+# =============================================================================
+# APP PLATFORM WITH TWO SEPARATE SERVICES
+# =============================================================================
 resource "digitalocean_app" "jamly" {
   spec {
     name   = "jamly-${var.environment}"
@@ -48,11 +49,10 @@ resource "digitalocean_app" "jamly" {
         registry      = "t-esp-asstagj"
         repository    = "api"
         tag           = "staging"
-      }  
-
+      }
+      
       http_port = 80
-
-      # Environment variables for the API
+      
       env {
         key   = "APP_ENV"
         value = var.environment
@@ -62,29 +62,52 @@ resource "digitalocean_app" "jamly" {
         key   = "APP_SECRET"
         value = var.app_secret
       }
-
+      
       env {
-        key = "MERCURE_JWT_SECRET"
+        key   = "MERCURE_JWT_SECRET"
         value = "tespmasstagjmercure"
       }
-
+      
       env {
-        key = "MERCURE_PUBLISHER_JWT_KEY"
+        key   = "MERCURE_PUBLISHER_JWT_KEY"
         value = "tespmasstagjmercure"
       }
-
+      
       env { 
-        key = "MERCURE_SUBSCRIBER_JWT_KEY"
+        key   = "MERCURE_SUBSCRIBER_JWT_KEY"
         value = "tespmasstagjmercure"
       }
-
+      
       env {
-        key = "DATABASE_URL"
+        key   = "DATABASE_URL"
         value = digitalocean_database_cluster.postgres.uri
       }
     }
 
+    # Web Service - Next.js
+    service {
+      name               = "web"
+      instance_count     = 1
+      instance_size_slug = "basic-xxs"
+      
+      image {
+        registry_type = "GHCR"
+        registry      = "t-esp-asstagj"
+        repository    = "web"
+        tag           = "staging"
+      }
+      
+      http_port = 3000
+      
+      env {
+        key   = "NODE_ENV"
+        value = "staging"
+      }
+    }
+
+    # Ingress routing
     ingress {
+      # Route /api/* to the API service
       rule {
         match {
           path {
@@ -95,6 +118,38 @@ resource "digitalocean_app" "jamly" {
           name = "api"
         }
       }
+
+      # Route /bundles/* to the API service (for Symfony assets)
+      rule {
+        match {
+          path {
+            prefix = "/bundles"
+          }
+        }
+        component {
+          name = "api"
+        }
+      }
+      
+      # Route everything else to the web service
+      rule {
+        match {
+          path {
+            prefix = "/"
+          }
+        }
+        component {
+          name = "web"
+        }
+      }
     }
   }
+}
+
+# =============================================================================
+# OUTPUTS
+# =============================================================================
+output "app_live_url" {
+  value       = digitalocean_app.jamly.live_url
+  description = "The live URL of the app"
 }
