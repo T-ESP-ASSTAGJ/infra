@@ -70,13 +70,15 @@ jobs:
       - name: Set image metadata
         id: meta
         run: |
+          # Convertir le nom de l'image en minuscules
+          IMAGE_NAME_LOWER=$(echo "${{ inputs.image_name }}" | tr '[:upper:]' '[:lower:]')
           IMAGE_TAG="${{ github.sha }}"
-          FULL_IMAGE="${{ inputs.image_name }}:${IMAGE_TAG}"
-          
-          echo "image_url=${{ inputs.image_name }}" >> $GITHUB_OUTPUT
+          FULL_IMAGE="${IMAGE_NAME_LOWER}:${IMAGE_TAG}"
+
+          echo "image_url=${IMAGE_NAME_LOWER}" >> $GITHUB_OUTPUT
           echo "image_tag=${IMAGE_TAG}" >> $GITHUB_OUTPUT
           echo "full_image=${FULL_IMAGE}" >> $GITHUB_OUTPUT
-          
+
           echo "📦 Image: ${FULL_IMAGE}"
 
       - name: Login to GitHub Container Registry
