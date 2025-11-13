@@ -28,7 +28,7 @@ on:
         type: boolean
         default: true
     secrets:
-      GITHUB_TOKEN:
+      GH_TOKEN:
         description: 'GitHub token for registry access'
         required: true
       APP_SECRET:
@@ -85,7 +85,7 @@ jobs:
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          password: ${{ secrets.GH_TOKEN }}
 
       - name: Create .env.local with secrets
         run: |
