@@ -88,19 +88,16 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Create .env.local with secrets
-        if: secrets.APP_SECRET != ''
         run: |
-          echo "Creating .env.local file..."
-          
+          # Le [ -n ] vérifie si la variable est non-vide avant d'écrire
           [ -n "${{ secrets.APP_SECRET }}" ] && echo "APP_SECRET=${{ secrets.APP_SECRET }}" >> .env.local
           [ -n "${{ secrets.DATABASE_URL }}" ] && echo "DATABASE_URL=${{ secrets.DATABASE_URL }}" >> .env.local
           [ -n "${{ secrets.MERCURE_JWT_SECRET }}" ] && echo "MERCURE_JWT_SECRET=${{ secrets.MERCURE_JWT_SECRET }}" >> .env.local
-          
-          # Hardcoded values (adapt if needed)
+
           echo "MERCURE_URL=https://example.com/.well-known/mercure" >> .env.local
           echo "MERCURE_PUBLIC_URL=https://example.com/.well-known/mercure" >> .env.local
-          
-          echo "✅ .env.local created"
+
+          echo "✅ .env.local created (with provided secrets)"
 
       - name: Build Docker image
         run: |
