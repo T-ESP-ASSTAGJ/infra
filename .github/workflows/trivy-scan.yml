@@ -31,7 +31,7 @@ on:
       DISCORD_WEBHOOK_URL:
         required: false
         description: 'Discord webhook URL for alerts'
-      GH_TOKEN:
+      GHCR_PAT:
         required: false
         description: 'GitHub token for registry access'
     outputs:
@@ -93,7 +93,7 @@ jobs:
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
-          password: ${{ secrets.GH_TOKEN }}
+          password: ${{ secrets.GHCR_PAT }}
 
       # Détection automatique du type de projet
       - name: Detect project type and prepare scan info
