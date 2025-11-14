@@ -26,6 +26,9 @@ locals {
   )
 
   name_prefix = "${var.project_name}-${local.environment}"
+
+  # Compute the API FQDN based on Azure Container Apps naming pattern
+  api_fqdn = "${local.name_prefix}-api.${azurerm_container_app_environment.main.default_domain}"
 }
 
 # Resource Group
@@ -115,13 +118,13 @@ resource "azurerm_container_app" "api" {
       }
 
       env {
-        name  = "MERCURE_PUBLISHER_JWT_KEY"
-        value = var.mercure_publisher_jwt_key
+        name  = "MERCURE_URL"
+        value = "https://${local.api_fqdn}/.well-known/mercure"
       }
 
       env {
-        name  = "MERCURE_SUBSCRIBER_JWT_KEY"
-        value = var.mercure_subscriber_jwt_key
+        name = "MERCURE_PUBLIC_URL"
+        value = "https://${local.api_fqdn}/.well-known/mercure"
       }
 
       env {
