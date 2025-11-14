@@ -1,6 +1,4 @@
-# infra/.github/workflows/trivy-scan.yml
-
-name: Trivy Security Pipeline Scan
+name: Trivy Security Scan
 
 on:
   workflow_call:
@@ -23,11 +21,15 @@ on:
         required: false
         type: string
         description: 'Discord webhook URL for alerts'
+      custom_message:
+        required: false
+        type: string
+        description: 'Custom message to display in notifications (e.g., project name and branch)'
     secrets:
       DISCORD_WEBHOOK_URL:
         required: false
         description: 'Discord webhook URL for alerts'
-      GH_TOKEN:
+      GHCR_PAT:
         required: false
         description: 'GitHub token for registry access'
     outputs:
@@ -89,7 +91,7 @@ jobs:
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
-          password: ${{ secrets.GH_TOKEN }}
+          password: ${{ secrets.GHCR_PAT }}
 
       # Détection automatique du type de projet
       - name: Detect project type and prepare scan info
@@ -164,6 +166,28 @@ jobs:
           trivy-config: ${{ inputs.trivy_config_file }}
           format: 'sarif'
           output: 'trivy-image-results.sarif'
+      # À ajouter après les scans SARIF existants
+
+      # Scan filesystem pour JSON (analyse des vulnérabilités)
+      - name: Run Trivy filesystem scan (JSON)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          trivy-config: ${{ inputs.trivy_config_file }}
+          format: 'json'
+          output: 'trivy-fs-results.json'
+
+      # Scan image pour JSON (analyse des vulnérabilités)
+      - name: Run Trivy image scan (JSON)
+        if: ${{ steps.detect.outputs.docker_project == 'true' && inputs.image_name != '' }}
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: 'image'
+          image-ref: '${{ inputs.image_name }}:${{ inputs.image_tag }}'
+          trivy-config: ${{ inputs.trivy_config_file }}
+          format: 'json'
+          output: 'trivy-image-results.json'
 
       # Upload des résultats vers GitHub Security
       - name: Upload filesystem scan results
@@ -180,28 +204,6 @@ jobs:
           sarif_file: 'trivy-image-results.sarif'
           category: 'trivy-image'
 
-      - name: Generate human-readable report
-        run: |
-          echo "# Security Scan Report" > scan-report.md
-          echo "" >> scan-report.md
-          echo "## Scan Summary" >> scan-report.md
-          echo "" >> scan-report.md
-          
-          # Filesystem scan summary
-          echo "### Filesystem Scan" >> scan-report.md
-          if [ -f "trivy-fs-results.sarif" ]; then
-            trivy fs . --format table --severity CRITICAL,HIGH,MEDIUM >> scan-report.md 2>/dev/null || echo "No vulnerabilities found in filesystem" >> scan-report.md
-          fi
-          echo "" >> scan-report.md
-          
-          # Image scan summary (si applicable)
-          if [ "${{ steps.detect.outputs.docker_project }}" == "true" ] && [ "${{ inputs.image_name }}" != "" ]; then
-            echo "### Docker Image Scan" >> scan-report.md
-            trivy image ${{ inputs.image_name }}:${{ inputs.image_tag }} --format table --severity CRITICAL,HIGH,MEDIUM >> scan-report.md 2>/dev/null || echo "No vulnerabilities found in image" >> scan-report.md
-            echo "" >> scan-report.md
-          fi
-
-      # Analyse des résultats pour alertes
       - name: Analyze scan results
         id: summary
         run: |
@@ -210,64 +212,66 @@ jobs:
           CRITICAL_COUNT=0
           HIGH_COUNT=0
           MEDIUM_COUNT=0
-          LOW_COUNT=0
-          INFO_COUNT=0
           
-          FS_CRITICAL=0
-          FS_HIGH=0
-          FS_MEDIUM=0
-          IMG_CRITICAL=0
-          IMG_HIGH=0
-          IMG_MEDIUM=0
+          # Compter les vulns dans le JSON filesystem
+          if [ -f "trivy-fs-results.json" ]; then
+            FS_CRITICAL=$(jq '[.Results[]?.Vulnerabilities[]? | select(.Severity == "CRITICAL")] | length' trivy-fs-results.json 2>/dev/null || echo "0")
+            FS_HIGH=$(jq '[.Results[]?.Vulnerabilities[]? | select(.Severity == "HIGH")] | length' trivy-fs-results.json 2>/dev/null || echo "0")
+            FS_MEDIUM=$(jq '[.Results[]?.Vulnerabilities[]? | select(.Severity == "MEDIUM")] | length' trivy-fs-results.json 2>/dev/null || echo "0")
           
-          # Compter les vulnérabilités dans les fichiers SARIF
-          if [ -f "trivy-fs-results.sarif" ]; then
-            FS_CRITICAL=$(jq '[.runs[].results[] | select(.level == "error")] | length' trivy-fs-results.sarif 2>/dev/null || echo "0")
-            FS_HIGH=$(jq '[.runs[].results[] | select(.level == "warning")] | length' trivy-fs-results.sarif 2>/dev/null || echo "0")
-            FS_MEDIUM=$(jq '[.runs[].results[] | select(.level == "note")] | length' trivy-fs-results.sarif 2>/dev/null || echo "0")
             CRITICAL_COUNT=$((CRITICAL_COUNT + FS_CRITICAL))
             HIGH_COUNT=$((HIGH_COUNT + FS_HIGH))
             MEDIUM_COUNT=$((MEDIUM_COUNT + FS_MEDIUM))
-            echo "Filesystem scan: $FS_CRITICAL critical, $FS_HIGH high, $FS_MEDIUM medium"
+          
+            echo "Filesystem: $FS_CRITICAL critical, $FS_HIGH high, $FS_MEDIUM medium"
           fi
           
-          if [ -f "trivy-image-results.sarif" ]; then
-            IMG_CRITICAL=$(jq '[.runs[].results[] | select(.level == "error")] | length' trivy-image-results.sarif 2>/dev/null || echo "0")
-            IMG_HIGH=$(jq '[.runs[].results[] | select(.level == "warning")] | length' trivy-image-results.sarif 2>/dev/null || echo "0")
-            IMG_MEDIUM=$(jq '[.runs[].results[] | select(.level == "note")] | length' trivy-image-results.sarif 2>/dev/null || echo "0")
+          # Compter les vulns dans le JSON image
+          if [ -f "trivy-image-results.json" ]; then
+            IMG_CRITICAL=$(jq '[.Results[]?.Vulnerabilities[]? | select(.Severity == "CRITICAL")] | length' trivy-image-results.json 2>/dev/null || echo "0")
+            IMG_HIGH=$(jq '[.Results[]?.Vulnerabilities[]? | select(.Severity == "HIGH")] | length' trivy-image-results.json 2>/dev/null || echo "0")
+            IMG_MEDIUM=$(jq '[.Results[]?.Vulnerabilities[]? | select(.Severity == "MEDIUM")] | length' trivy-image-results.json 2>/dev/null || echo "0")
+          
             CRITICAL_COUNT=$((CRITICAL_COUNT + IMG_CRITICAL))
             HIGH_COUNT=$((HIGH_COUNT + IMG_HIGH))
             MEDIUM_COUNT=$((MEDIUM_COUNT + IMG_MEDIUM))
-            echo "Image scan: $IMG_CRITICAL critical, $IMG_HIGH high, $IMG_MEDIUM medium"
+          
+            echo "Image: $IMG_CRITICAL critical, $IMG_HIGH high, $IMG_MEDIUM medium"
           fi
           
           TOTAL_VULNS=$((CRITICAL_COUNT + HIGH_COUNT + MEDIUM_COUNT))
-          echo "Total vulnerabilities found: $TOTAL_VULNS (Critical: $CRITICAL_COUNT, High: $HIGH_COUNT, Medium: $MEDIUM_COUNT)"
+          echo "TOTAL: $CRITICAL_COUNT critical, $HIGH_COUNT high, $MEDIUM_COUNT medium"
           
-          # Préparer le résumé détaillé
-          SUMMARY="🔴 Critical: $CRITICAL_COUNT | 🟠 High: $HIGH_COUNT | 🟡 Medium: $MEDIUM_COUNT"
-          echo "results=$SUMMARY" >> $GITHUB_OUTPUT
-          
-          # Export des compteurs individuels pour Discord
+          # Outputs
+          echo "results=🔴 Critical: $CRITICAL_COUNT | 🟠 High: $HIGH_COUNT | 🟡 Medium: $MEDIUM_COUNT" >> $GITHUB_OUTPUT
           echo "critical_count=$CRITICAL_COUNT" >> $GITHUB_OUTPUT
           echo "high_count=$HIGH_COUNT" >> $GITHUB_OUTPUT
           echo "medium_count=$MEDIUM_COUNT" >> $GITHUB_OUTPUT
           echo "total_count=$TOTAL_VULNS" >> $GITHUB_OUTPUT
-          echo "fs_critical=$FS_CRITICAL" >> $GITHUB_OUTPUT
-          echo "fs_high=$FS_HIGH" >> $GITHUB_OUTPUT
-          echo "fs_medium=$FS_MEDIUM" >> $GITHUB_OUTPUT
-          echo "img_critical=$IMG_CRITICAL" >> $GITHUB_OUTPUT
-          echo "img_high=$IMG_HIGH" >> $GITHUB_OUTPUT
-          echo "img_medium=$IMG_MEDIUM" >> $GITHUB_OUTPUT
           
-          # Déterminer s'il faut alerter
+          # A-t-on des vulnérabilités importantes ?
           if [ $CRITICAL_COUNT -gt 0 ] || [ $HIGH_COUNT -gt 0 ]; then
             echo "has_vulns=true" >> $GITHUB_OUTPUT
-            echo "Vulnerabilities found - alerts will be sent"
           else
             echo "has_vulns=false" >> $GITHUB_OUTPUT
-            echo "No critical/high vulnerabilities found"
           fi
+
+      - name: Generate summary report
+        run: |
+          echo "# Security Scan Report" > scan-report.md
+          echo "" >> scan-report.md
+          echo "## Scan Summary" >> scan-report.md
+          echo "" >> scan-report.md
+
+          echo "- 🔴 Critical: ${{ steps.summary.outputs.critical_count }}" >> scan-report.md
+          echo "- 🟠 High: ${{ steps.summary.outputs.high_count }}" >> scan-report.md
+          echo "- 🟡 Medium: ${{ steps.summary.outputs.medium_count }}" >> scan-report.md
+          echo "- 📊 Total: ${{ steps.summary.outputs.total_count }}" >> scan-report.md
+          echo "" >> scan-report.md
+          echo "👉 [View full scan results in GitHub Security tab](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/security/code-scanning?query=ref%3A${GITHUB_REF_NAME})" >> scan-report.md
+          
+          echo "--- DEBUG: scan-report.md content ---"
+          cat scan-report.md
 
       # Préparer le message Discord
       - name: Prepare Discord notification
@@ -300,128 +304,41 @@ jobs:
           echo "emoji=${EMOJI}" >> $GITHUB_OUTPUT
           echo "status=${STATUS}" >> $GITHUB_OUTPUT
 
-      # Notification Discord améliorée
-      - name: Send Discord notification
-        if: ${{ (github.event_name == 'schedule') && (inputs.discord_webhook_url != '' || inputs.DISCORD_WEBHOOK_URL != '') }}
+      - name: Send Discord Notification
+        if: always() && steps.summary.outputs.critical_count > 0
+        env:
+          DISCORD_WEBHOOK: ${{ inputs.discord_webhook_url || secrets.DISCORD_WEBHOOK_URL }}
         run: |
-          # Utiliser le webhook fourni en input ou en secret
-          WEBHOOK_URL="${{ inputs.discord_webhook_url }}"
-          if [[ -z "$WEBHOOK_URL" ]]; then
-            WEBHOOK_URL="${{ inputs.DISCORD_WEBHOOK_URL }}"
+          if [ -z "$DISCORD_WEBHOOK" ]; then
+            echo "No Discord webhook configured, skipping notification"
+            exit 0
+          fi
+
+          STATUS="✅ Passed"
+          if [ "${{ steps.summary.outputs.has_vulns }}" == "true" ]; then
+            STATUS="⚠️ Vulnerabilities Found"
           fi
           
-          # Préparer les détails des scans
-          SCAN_DETAILS=""
-          if [[ "${{ steps.summary.outputs.fs_critical }}" != "0" ]] || [[ "${{ steps.summary.outputs.fs_high }}" != "0" ]] || [[ "${{ steps.summary.outputs.fs_medium }}" != "0" ]]; then
-            SCAN_DETAILS="${SCAN_DETAILS}📦 **Filesystem**: ${{ steps.summary.outputs.fs_critical }}🔴 ${{ steps.summary.outputs.fs_high }}🟠 ${{ steps.summary.outputs.fs_medium }}🟡\n"
+          # Message personnalisé s'il est fourni
+          CUSTOM_MSG=""
+          if [ -n "${{ inputs.custom_message }}" ]; then
+            CUSTOM_MSG="**${{ inputs.custom_message }}**"
           fi
           
-          if [[ "${{ steps.detect.outputs.docker_project }}" == "true" ]] && [[ "${{ inputs.image_name }}" != "" ]]; then
-            if [[ "${{ steps.summary.outputs.img_critical }}" != "0" ]] || [[ "${{ steps.summary.outputs.img_high }}" != "0" ]] || [[ "${{ steps.summary.outputs.img_medium }}" != "0" ]]; then
-              SCAN_DETAILS="${SCAN_DETAILS}🐳 **Docker Image**: ${{ steps.summary.outputs.img_critical }}🔴 ${{ steps.summary.outputs.img_high }}🟠 ${{ steps.summary.outputs.img_medium }}🟡\n"
-            fi
-          fi
+          PAYLOAD=$(jq -n \
+            --arg title "🔒 Security Scan $STATUS" \
+            --arg content "${CUSTOM_MSG}
+          - 🔴 Critical: ${{ steps.summary.outputs.critical_count }}
+          - 🟠 High: ${{ steps.summary.outputs.high_count }}
+          - 🟡 Medium: ${{ steps.summary.outputs.medium_count }}
+          - 📊 Total: ${{ steps.summary.outputs.total_count }}
           
-          # Si pas de vulnérabilités, montrer quand même ce qui a été scanné
-          if [[ "${{ steps.summary.outputs.total_count }}" == "0" ]]; then
-            SCAN_DETAILS="✅ **All scans completed successfully**\n${{ steps.detect.outputs.scan_types }}"
-          fi
+          👉 [View full scan results in GitHub Security tab](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/security/code-scanning?query=ref%3A${GITHUB_REF_NAME})" \
+            '{embeds: [{title: $title, description: $content, color: ${{ steps.discord-prep.outputs.color }}}]}' )
           
-          # Créer timestamp
-          TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%S.000Z)
-          UNIX_TIMESTAMP=$(date +%s)
-          
-          # Construire le JSON avec jq pour éviter les problèmes d'échappement
-          jq -n \
-            --arg title "${{ steps.discord-prep.outputs.emoji }} ${{ steps.discord-prep.outputs.status }}" \
-            --arg description "${SCAN_DETAILS}" \
-            --argjson color "${{ steps.discord-prep.outputs.color }}" \
-            --arg repo "${{ github.repository }}" \
-            --arg repo_url "https://github.com/${{ github.repository }}" \
-            --arg branch "${{ github.ref_name }}" \
-            --arg commit_sha "${{ github.sha }}" \
-            --arg short_sha "${{ github.sha }}" \
-            --arg commit_url "https://github.com/${{ github.repository }}/commit/${{ github.sha }}" \
-            --arg action_url "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
-            --arg critical "${{ steps.summary.outputs.critical_count }}" \
-            --arg high "${{ steps.summary.outputs.high_count }}" \
-            --arg medium "${{ steps.summary.outputs.medium_count }}" \
-            --arg total "${{ steps.summary.outputs.total_count }}" \
-            --arg scan_count "${{ steps.detect.outputs.scan_count }}" \
-            --arg timestamp "${TIMESTAMP}" \
-            --argjson unix_timestamp "${UNIX_TIMESTAMP}" \
-            '{
-              "embeds": [
-                {
-                  "title": $title,
-                  "description": $description,
-                  "color": $color,
-                  "fields": [
-                    {
-                      "name": "📦 Repository",
-                      "value": "[\($repo)](\($repo_url))",
-                      "inline": true
-                    },
-                    {
-                      "name": "🌿 Branch",
-                      "value": "`\($branch)`",
-                      "inline": true
-                    },
-                    {
-                      "name": "🔍 Scans Performed",
-                      "value": "\($scan_count) scan types",
-                      "inline": true
-                    },
-                    {
-                      "name": "🔴 Critical",
-                      "value": $critical,
-                      "inline": true
-                    },
-                    {
-                      "name": "🟠 High",
-                      "value": $high,
-                      "inline": true
-                    },
-                    {
-                      "name": "🟡 Medium",
-                      "value": $medium,
-                      "inline": true
-                    },
-                    {
-                      "name": "📊 Total Vulnerabilities",
-                      "value": $total,
-                      "inline": false
-                    },
-                    {
-                      "name": "🔗 Actions",
-                      "value": "[View Scan Results](\($action_url)) • [View Commit](\($commit_url))",
-                      "inline": false
-                    }
-                  ],
-                  "timestamp": $timestamp,
-                  "footer": {
-                    "text": "Trivy Security Scanner • \($repo)",
-                    "icon_url": "https://raw.githubusercontent.com/aquasecurity/trivy/main/docs/imgs/logo.png"
-                  }
-                }
-              ]
-            }' > discord_payload.json
-          
-          # Envoyer à Discord
-          HTTP_RESPONSE=$(curl -s -w "%{http_code}" \
-                              -H "Content-Type: application/json" \
-                              -d @discord_payload.json \
-                              "${WEBHOOK_URL}")
-          
-          HTTP_CODE=${HTTP_RESPONSE: -3}
-          
-          if [[ $HTTP_CODE -ge 200 && $HTTP_CODE -lt 300 ]]; then
-            echo "✅ Discord security notification sent successfully! (HTTP $HTTP_CODE)"
-          else
-            echo "❌ Failed to send Discord notification. HTTP Code: $HTTP_CODE"
-            echo "Response: ${HTTP_RESPONSE%???}"
-            exit 1
-          fi
+          curl -H "Content-Type: application/json" \
+               -d "$PAYLOAD" \
+               "$DISCORD_WEBHOOK"
 
       # Upload des artifacts pour consultation
       - name: Upload scan artifacts
@@ -454,3 +371,9 @@ jobs:
             } catch (error) {
               console.log('Could not read or post scan report:', error);
             }
+      - name: Fail on critical vulnerabilities
+        if: steps.summary.outputs.critical_count > 0
+        run: |
+            echo "::error::Critical vulnerabilities found: ${{ steps.summary.outputs.critical_count }}"
+            echo "Security scan failed due to critical vulnerabilities. Please fix them before merging."
+            exit 1
