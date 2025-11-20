@@ -1,0 +1,56 @@
+# AZURE CONFIGURATION
+
+subscription_id     = "your-azure-subscription-id-here"
+resource_group_name = "rg-jamly"
+location            = "francecentral"
+
+# PROJECT CONFIGURATION
+
+project_name = "jamly"
+environment  = "staging"
+
+# VM CONFIGURATION
+
+# Taille des VMs (API et Web)
+vm_size            = "Standard_B1s"
+vm_os_disk_size_gb = 30
+
+# Taille de la VM Database (peut être plus grosse)
+vm_size_database        = "Standard_B1s"
+vm_os_disk_size_gb_database = 30
+
+# SSH CONFIGURATION
+
+admin_username      = "azureuser"
+ssh_public_key_path = "~/.ssh/id_rsa.pub"
+
+# DATABASE CONFIGURATION
+
+db_admin_username = "psqladmin"
+db_admin_password = "ChangeMe123!SecurePassword"  # ⚠️ À CHANGER !
+db_name           = "jamly"
+
+# DOCKER IMAGES
+
+api_docker_image = "ghcr.io/t-esp-asstagj/api"
+api_docker_tag   = "staging"
+
+web_docker_image = "ghcr.io/t-esp-asstagj/web"
+web_docker_tag   = "staging"
+
+# APPLICATION SECRETS (Symfony/Mercure)
+
+app_secret                 = "your-symfony-app-secret-here"  # ⚠️ À CHANGER !
+mercure_jwt_secret         = "your-mercure-jwt-secret"       # ⚠️ À CHANGER !
+mercure_publisher_jwt_key  = "your-publisher-key"            # ⚠️ À CHANGER !
+mercure_subscriber_jwt_key = "your-subscriber-key"           # ⚠️ À CHANGER !
+
+# TAGS
+
+tags = {
+  ManagedBy   = "Terraform"
+  Project     = "Jamly"
+  Environment = "Staging"
+  CostCenter  = "Development"
+  Owner       = "DevOps Team"
+}
