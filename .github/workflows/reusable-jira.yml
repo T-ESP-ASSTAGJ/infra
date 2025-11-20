@@ -114,7 +114,10 @@ jobs:
               });
 
               if (!responseGet.ok) {
+                const errorBody = await responseGet.text();
                 console.error(`[${issueKey}] Failed to fetch transitions for issue ${issueKey}: ${responseGet.statusText}`);
+                console.error(`[${issueKey}] Response body: ${errorBody}`);
+                console.error(`[${issueKey}] Status code: ${responseGet.status}`);
                 continue;
               }
   
@@ -214,7 +217,10 @@ jobs:
               });
 
               if (!responseGet.ok) {
+                const errorBody = await responseGet.text();
                 console.error(`[${issueKey}] Failed to fetch transitions for issue ${issueKey}: ${responseGet.statusText}`);
+                console.error(`[${issueKey}] Response body: ${errorBody}`);
+                console.error(`[${issueKey}] Status code: ${responseGet.status}`);
                 continue;
               }
   
