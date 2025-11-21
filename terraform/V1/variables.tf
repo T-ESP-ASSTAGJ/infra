@@ -101,20 +101,6 @@ variable "mercure_jwt_secret" {
   sensitive   = true
 }
 
-variable "mercure_publisher_jwt_key" {
-  description = "Mercure publisher JWT key"
-  type        = string
-  default     = "tespmasstagjmercure"
-  sensitive   = true
-}
-
-variable "mercure_subscriber_jwt_key" {
-  description = "Mercure subscriber JWT key"
-  type        = string
-  default     = "tespmasstagjmercure"
-  sensitive   = true
-}
-
 variable "tags" {
   description = "Common tags to apply to all resources"
   type        = map(string)
