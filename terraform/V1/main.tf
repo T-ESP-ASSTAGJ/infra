@@ -6,12 +6,20 @@ terraform {
       source  = "hashicorp/azurerm"
       version = "~> 3.0"
     }
+    cloudflare = {
+      source  = "cloudflare/cloudflare"
+      version = "~> 4.0"
+    }
   }
 }
 
 provider "azurerm" {
   features {}
   subscription_id = var.subscription_id
+}
+
+provider "cloudflare" {
+  api_token = var.cloudflare_api_token
 }
 
 locals {
@@ -124,7 +132,7 @@ resource "azurerm_container_app" "api" {
 
       env {
         name = "MERCURE_PUBLIC_URL"
-        value = "https://${local.api_fqdn}/.well-known/mercure"
+        value = "https://${var.custom_domain}/.well-known/mercure"
       }
 
       env {
@@ -145,6 +153,138 @@ resource "azurerm_container_app" "api" {
       percentage      = 100
     }
   }
+}
+
+# Cloudflare TXT Record for Azure Domain Validation - Web
+resource "cloudflare_record" "web_validation" {
+  count   = var.custom_domain != "" && var.cloudflare_zone_id != "" ? 1 : 0
+  zone_id = var.cloudflare_zone_id
+  name    = local.environment == "production" ? "asuid" : "asuid.${local.environment}"
+  content = azurerm_container_app.web.custom_domain_verification_id
+  type    = "TXT"
+  ttl     = 3600
+
+  comment = "Azure domain validation for web - ${local.environment}"
+}
+
+# Cloudflare CNAME Record for Web Custom Domain
+resource "cloudflare_record" "web" {
+  count   = var.custom_domain != "" && var.cloudflare_zone_id != "" ? 1 : 0
+  zone_id = var.cloudflare_zone_id
+  name    = local.environment == "production" ? "@" : local.environment
+  content = azurerm_container_app.web.latest_revision_fqdn
+  type    = "CNAME"
+  ttl     = 1
+  proxied = false
+
+  comment = "Managed by Terraform - web ${local.environment} environment"
+}
+
+# Cloudflare TXT Record for Azure Domain Validation - API
+resource "cloudflare_record" "api_validation" {
+  count   = var.custom_domain_api != "" && var.cloudflare_zone_id != "" ? 1 : 0
+  zone_id = var.cloudflare_zone_id
+  name    = "asuid.${trimsuffix(var.custom_domain_api, ".jamly.eu")}"
+  content = azurerm_container_app.api.custom_domain_verification_id
+  type    = "TXT"
+  ttl     = 300
+
+  comment = "Azure domain validation for API - ${local.environment}"
+}
+
+# Cloudflare CNAME Record for API Custom Domain
+resource "cloudflare_record" "api" {
+  count   = var.custom_domain_api != "" && var.cloudflare_zone_id != "" ? 1 : 0
+  zone_id = var.cloudflare_zone_id
+  name    = trimsuffix(var.custom_domain_api, ".jamly.eu")
+  content = azurerm_container_app.api.latest_revision_fqdn
+  type    = "CNAME"
+  ttl     = 300
+  proxied = false
+
+  comment = "Managed by Terraform - API ${local.environment} environment"
+}
+
+# DNS validation check for web domain - polls until TXT record is resolvable
+resource "null_resource" "wait_for_web_dns" {
+  count = var.custom_domain != "" && var.cloudflare_zone_id != "" ? 1 : 0
+
+  provisioner "local-exec" {
+    command = <<-EOT
+      echo "Waiting for web TXT record to propagate..."
+      for i in {1..30}; do
+        if dig +short TXT ${cloudflare_record.web_validation[0].hostname} | grep -q "${azurerm_container_app.web.custom_domain_verification_id}"; then
+          echo "Web TXT record validated!"
+          exit 0
+        fi
+        echo "Attempt $i/30: TXT record not yet propagated, waiting 10s..."
+        sleep 10
+      done
+      echo "Warning: TXT record validation timed out after 5 minutes"
+      exit 0
+    EOT
+  }
+
+  depends_on = [
+    cloudflare_record.web_validation,
+    cloudflare_record.web
+  ]
+}
+
+# DNS validation check for API domain - polls until TXT record is resolvable
+resource "null_resource" "wait_for_api_dns" {
+  count = var.custom_domain_api != "" && var.cloudflare_zone_id != "" ? 1 : 0
+
+  provisioner "local-exec" {
+    command = <<-EOT
+      echo "Waiting for API TXT record to propagate..."
+      for i in {1..30}; do
+        if dig +short TXT ${cloudflare_record.api_validation[0].hostname} | grep -q "${azurerm_container_app.api.custom_domain_verification_id}"; then
+          echo "API TXT record validated!"
+          exit 0
+        fi
+        echo "Attempt $i/30: TXT record not yet propagated, waiting 10s..."
+        sleep 10
+      done
+      echo "Warning: TXT record validation timed out after 5 minutes"
+      exit 0
+    EOT
+  }
+
+  depends_on = [
+    cloudflare_record.api_validation,
+    cloudflare_record.api
+  ]
+}
+
+# Managed Certificate for Web Custom Domain
+resource "azurerm_container_app_custom_domain" "web" {
+  count                    = var.custom_domain != "" ? 1 : 0
+  name                     = var.custom_domain
+  container_app_id         = azurerm_container_app.web.id
+  certificate_binding_type = "SniEnabled"
+
+  depends_on = [
+    azurerm_container_app.web,
+    cloudflare_record.web,
+    cloudflare_record.web_validation,
+    null_resource.wait_for_web_dns
+  ]
+}
+
+# Managed Certificate for API Custom Domain
+resource "azurerm_container_app_custom_domain" "api" {
+  count                    = var.custom_domain_api != "" ? 1 : 0
+  name                     = var.custom_domain_api
+  container_app_id         = azurerm_container_app.api.id
+  certificate_binding_type = "SniEnabled"
+
+  depends_on = [
+    azurerm_container_app.api,
+    cloudflare_record.api,
+    cloudflare_record.api_validation,
+    null_resource.wait_for_api_dns
+  ]
 }
 
 # Web Container App (Next.js)

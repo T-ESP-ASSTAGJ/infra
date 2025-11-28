@@ -113,3 +113,28 @@ variable "subscription_id" {
   description = "Azure Subscription ID"
   type        = string
 }
+
+variable "custom_domain" {
+  description = "Custom domain for the web application (staging.jamly.eu for staging, jamly.eu for prod)"
+  type        = string
+  default     = ""
+}
+
+variable "custom_domain_api" {
+  description = "Custom domain for the API application (api-staging.jamly.eu for staging, api.jamly.eu for prod)"
+  type        = string
+  default     = ""
+}
+
+variable "cloudflare_api_token" {
+  description = "Cloudflare API token for DNS management"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "cloudflare_zone_id" {
+  description = "Cloudflare Zone ID for jamly.eu domain"
+  type        = string
+  default     = ""
+}
