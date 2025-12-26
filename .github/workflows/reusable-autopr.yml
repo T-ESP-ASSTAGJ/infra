@@ -77,9 +77,10 @@ jobs:
 
       - name: Create PR to `${{ inputs.dev_branch }}`
         if: >-
-          contains(github.event.head_commit.message, inputs.dev_tag)  ||
+          (contains(github.event.head_commit.message, inputs.dev_tag)  ||
           contains(github.event.head_commit.message, inputs.prod_tag) ||
-          contains(github.event.head_commit.message, inputs.trad_tag)
+          contains(github.event.head_commit.message, inputs.trad_tag)) &&
+          github.ref != format('refs/heads/{0}', inputs.dev_branch)
         id: create-dev-pr
         uses: peter-evans/create-pull-request@v7
         with:
