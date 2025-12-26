@@ -41,3 +41,15 @@ variable "custom_domain_api" {
   description = "Custom domain for API"
   type        = string
 }
+
+variable "web_ssl_cert_secret_id" {
+  description = "Key Vault secret ID for web SSL certificate"
+  type        = string
+  default     = ""
+}
+
+variable "api_ssl_cert_secret_id" {
+  description = "Key Vault secret ID for API SSL certificate"
+  type        = string
+  default     = ""
+}
