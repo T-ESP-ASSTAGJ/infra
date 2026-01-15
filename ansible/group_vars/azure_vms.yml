@@ -1,0 +1,9 @@
+---
+# Variables specific to Azure VMs group
+
+# Azure-specific settings
+cloud_provider: "azure"
+monitoring_enabled: true
+
+# Environment label (can be overridden in host_vars if needed)
+environment_name: "production"

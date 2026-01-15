@@ -1,0 +1,39 @@
+---
+# kubeadm configuration for control plane initialization
+apiVersion: kubeadm.k8s.io/v1beta3
+kind: InitConfiguration
+localAPIEndpoint:
+  advertiseAddress: {{ k8s_advertise_address | default(ansible_default_ipv4.address) }}
+  bindPort: 6443
+nodeRegistration:
+  criSocket: unix:///var/run/containerd/containerd.sock
+  imagePullPolicy: IfNotPresent
+  name: {{ ansible_hostname }}
+  taints: null  # Allow pods on control plane (single node setup)
+---
+apiVersion: kubeadm.k8s.io/v1beta3
+kind: ClusterConfiguration
+clusterName: {{ k8s_cluster_name }}
+kubernetesVersion: v{{ k8s_version }}.0
+controlPlaneEndpoint: "{{ k8s_advertise_address | default(ansible_default_ipv4.address) }}:6443"
+networking:
+  dnsDomain: cluster.local
+  podSubnet: {{ k8s_pod_network_cidr }}
+  serviceSubnet: {{ k8s_service_cidr }}
+apiServer:
+  timeoutForControlPlane: 4m0s
+  certSANs:
+    - {{ ansible_hostname }}
+    - {{ ansible_host }}
+    - {{ k8s_advertise_address | default(ansible_default_ipv4.address) }}
+    - 127.0.0.1
+    - localhost
+controllerManager: {}
+scheduler: {}
+etcd:
+  local:
+    dataDir: /var/lib/etcd
+---
+apiVersion: kubelet.config.k8s.io/v1beta1
+kind: KubeletConfiguration
+cgroupDriver: systemd

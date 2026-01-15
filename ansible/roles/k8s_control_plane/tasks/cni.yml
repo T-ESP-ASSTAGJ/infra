@@ -1,0 +1,97 @@
+---
+# Install and configure CNI plugin (Cilium)
+
+- name: Check if CNI is already installed
+  ansible.builtin.command: kubectl get pods -n kube-system -l k8s-app=cilium
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  register: cilium_check
+  changed_when: false
+  failed_when: false
+
+- name: Determine if Cilium is installed
+  ansible.builtin.set_fact:
+    cilium_installed: "{{ cilium_check.rc == 0 and 'cilium' in cilium_check.stdout }}"
+
+- name: Install Cilium CNI
+  when: not cilium_installed
+  block:
+    - name: Check if Cilium CLI is installed
+      ansible.builtin.command: which cilium
+      register: cilium_cli_check
+      changed_when: false
+      failed_when: false
+
+    - name: Install Cilium CLI
+      when: cilium_cli_check.rc != 0
+      block:
+        - name: Get Cilium CLI latest version
+          ansible.builtin.uri:
+            url: https://api.github.com/repos/cilium/cilium-cli/releases/latest
+            return_content: true
+          register: cilium_cli_release
+
+        - name: Set Cilium CLI version
+          ansible.builtin.set_fact:
+            cilium_cli_version: "{{ cilium_cli_release.json.tag_name }}"
+
+        - name: Download Cilium CLI
+          ansible.builtin.get_url:
+            url: "https://github.com/cilium/cilium-cli/releases/download/{{ cilium_cli_version }}/cilium-linux-{{ 'amd64' if ansible_architecture == 'x86_64' else ansible_architecture }}.tar.gz"
+            dest: /tmp/cilium-cli.tar.gz
+            mode: '0644'
+
+        - name: Extract Cilium CLI
+          ansible.builtin.unarchive:
+            src: /tmp/cilium-cli.tar.gz
+            dest: /usr/local/bin
+            remote_src: true
+            mode: '0755'
+
+        - name: Clean up Cilium CLI tarball
+          ansible.builtin.file:
+            path: /tmp/cilium-cli.tar.gz
+            state: absent
+
+    - name: Wait for API server to be fully ready
+      ansible.builtin.command: >
+        kubectl get --raw=/readyz
+      environment:
+        KUBECONFIG: /etc/kubernetes/admin.conf
+      register: api_ready
+      until: api_ready.rc == 0
+      retries: 30
+      delay: 10
+      changed_when: false
+
+    - name: Install Cilium using CLI
+      ansible.builtin.command: >
+        cilium install
+        --version {{ cilium_version }}
+        --set ipam.mode={{ cilium_ipam_mode }}
+        --set ipam.operator.clusterPoolIPv4PodCIDRList={{ k8s_pod_network_cidr }}
+        --set kubeProxyReplacement={{ cilium_kube_proxy_replacement | string | lower }}
+        {{ '--set hubble.enabled=' + (cilium_hubble_enabled | string | lower) if cilium_hubble_enabled is defined else '' }}
+        {{ '--set hubble.relay.enabled=' + (cilium_hubble_enabled | string | lower) if cilium_hubble_enabled is defined else '' }}
+        {{ '--set hubble.ui.enabled=' + (cilium_hubble_enabled | string | lower) if cilium_hubble_enabled is defined else '' }}
+      environment:
+        KUBECONFIG: /etc/kubernetes/admin.conf
+      register: cilium_install
+      changed_when: "'✅' in cilium_install.stdout or 'successfully' in cilium_install.stdout.lower()"
+
+    - name: Wait for Cilium to be ready
+      ansible.builtin.command: cilium status --wait
+      environment:
+        KUBECONFIG: /etc/kubernetes/admin.conf
+      register: cilium_status
+      until: cilium_status.rc == 0
+      retries: 30
+      delay: 10
+      changed_when: false
+
+- name: Verify CNI is working
+  ansible.builtin.command: kubectl get nodes -o wide
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  register: nodes_status
+  changed_when: false

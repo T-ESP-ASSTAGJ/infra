@@ -1,0 +1,38 @@
+---
+# Main orchestrator for Kubernetes control plane setup
+
+- name: Include prerequisites tasks
+  ansible.builtin.include_tasks: prerequisites.yml
+  tags:
+    - k8s
+    - k8s-prerequisites
+
+- name: Include container runtime setup
+  ansible.builtin.include_tasks: container_runtime.yml
+  tags:
+    - k8s
+    - k8s-container-runtime
+
+- name: Include Kubernetes packages installation
+  ansible.builtin.include_tasks: kubernetes.yml
+  tags:
+    - k8s
+    - k8s-packages
+
+- name: Include control plane initialization
+  ansible.builtin.include_tasks: control_plane.yml
+  tags:
+    - k8s
+    - k8s-control-plane
+
+- name: Include kubeconfig setup
+  ansible.builtin.include_tasks: kubeconfig.yml
+  tags:
+    - k8s
+    - k8s-kubeconfig
+
+- name: Include CNI installation
+  ansible.builtin.include_tasks: cni.yml
+  tags:
+    - k8s
+    - k8s-cni

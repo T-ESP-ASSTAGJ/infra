@@ -1,0 +1,70 @@
+---
+# Initialize Kubernetes control plane with kubeadm
+
+- name: Check if Kubernetes is already initialized
+  ansible.builtin.stat:
+    path: /etc/kubernetes/admin.conf
+  register: k8s_admin_conf
+
+- name: Initialize Kubernetes control plane
+  when: not k8s_admin_conf.stat.exists
+  block:
+    - name: Create kubeadm configuration file
+      ansible.builtin.template:
+        src: kubeadm_config.yaml.j2
+        dest: /tmp/kubeadm-config.yaml
+        mode: '0600'
+
+    - name: Run kubeadm init
+      ansible.builtin.command: >
+        kubeadm init
+        --config=/tmp/kubeadm-config.yaml
+        --upload-certs
+        --v=5
+      register: kubeadm_init
+      changed_when: "'Your Kubernetes control-plane has initialized successfully' in kubeadm_init.stdout"
+      retries: 3
+      delay: 10
+      until: kubeadm_init.rc == 0
+      async: 600
+      poll: 10
+
+    - name: Wait for API server to be ready
+      ansible.builtin.wait_for:
+        host: "{{ k8s_advertise_address | default(ansible_default_ipv4.address) }}"
+        port: 6443
+        timeout: 300
+        delay: 5
+      when: k8s_admin_conf.stat.exists == false
+
+    - name: Save kubeadm init output
+      ansible.builtin.copy:
+        content: "{{ kubeadm_init.stdout }}"
+        dest: /root/kubeadm-init-output.txt
+        mode: '0600'
+
+    - name: Extract worker join command
+      ansible.builtin.shell: |
+        grep -A 2 "kubeadm join" /root/kubeadm-init-output.txt | grep -v "control-plane" | tr -d '\n' | sed 's/\s\+/ /g'
+      register: worker_join_command
+      changed_when: false
+
+    - name: Save worker join command
+      ansible.builtin.copy:
+        content: "{{ worker_join_command.stdout }}"
+        dest: /root/k8s-worker-join-command.sh
+        mode: '0700'
+
+    - name: Extract control plane join command
+      ansible.builtin.shell: |
+        grep -A 3 "You can now join any number of control-plane" /root/kubeadm-init-output.txt | grep -v "^--" | tr -d '\n' | sed 's/\s\+/ /g'
+      register: control_plane_join_command
+      changed_when: false
+      failed_when: false
+
+    - name: Save control plane join command
+      ansible.builtin.copy:
+        content: "{{ control_plane_join_command.stdout }}"
+        dest: /root/k8s-control-plane-join-command.sh
+        mode: '0700'
+      when: control_plane_join_command.stdout != ""

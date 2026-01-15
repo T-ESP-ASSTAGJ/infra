@@ -1,0 +1,19 @@
+---
+# Default variables for common role
+# These can be overridden in group_vars or host_vars
+
+# Package installation
+common_packages:
+  - curl
+  - wget
+  - htop
+
+# System upgrade behavior
+perform_system_upgrade: true
+
+# Firewall
+enable_ufw_firewall: false
+common_firewall_rules: []
+
+# Timezone
+timezone: "UTC"
