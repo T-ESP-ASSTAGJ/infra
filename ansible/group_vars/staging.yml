@@ -1,9 +1,0 @@
----
-# Variables specific to staging environment
-
-# Staging-specific settings
-environment_name: staging
-log_level: debug
-
-# Less restrictive settings for staging
-allow_password_auth: true

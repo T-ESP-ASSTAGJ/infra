@@ -1,18 +1,74 @@
 ---
+# Main tasks for common role - system setup and hardening
+
 - name: Update apt cache
   ansible.builtin.apt:
     update_cache: yes
     cache_valid_time: 3600
   retries: 3
   delay: 5
+  register: apt_update
+  until: apt_update is succeeded
 
 - name: Install common packages
   ansible.builtin.apt:
     name: "{{ common_packages }}"
     state: present
+    update_cache: no
+  register: apt_install
+  retries: 3
+  delay: 5
+  until: apt_install is succeeded
 
 - name: Upgrade all packages
   ansible.builtin.apt:
     upgrade: safe
     autoremove: yes
     autoclean: yes
+  register: apt_upgrade
+  when: perform_system_upgrade | default(true)
+
+- name: Set timezone
+  community.general.timezone:
+    name: "{{ timezone }}"
+  when: timezone is defined
+
+- name: Configure UFW firewall
+  when: enable_ufw_firewall | default(false)
+  block:
+    - name: Install UFW
+      ansible.builtin.apt:
+        name: ufw
+        state: present
+
+    - name: Ensure SSH is allowed before enabling UFW
+      community.general.ufw:
+        rule: allow
+        port: "22"
+        proto: tcp
+        comment: "SSH - Critical, allow before enabling firewall"
+
+    - name: Configure common firewall rules
+      community.general.ufw:
+        rule: "{{ item.rule }}"
+        port: "{{ item.port }}"
+        proto: "{{ item.proto }}"
+        comment: "{{ item.comment | default(omit) }}"
+      loop: "{{ common_firewall_rules }}"
+      when: common_firewall_rules is defined
+
+    - name: Configure UFW default policies
+      community.general.ufw:
+        state: enabled
+        policy: deny
+        direction: incoming
+
+    - name: Allow outgoing traffic
+      community.general.ufw:
+        state: enabled
+        policy: allow
+        direction: outgoing
+
+- name: Ensure system is ready
+  ansible.builtin.debug:
+    msg: "Common setup completed successfully"

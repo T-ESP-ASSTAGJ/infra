@@ -1,0 +1,19 @@
+---
+# Handlers for k8s_control_plane role
+
+- name: restart containerd
+  ansible.builtin.systemd:
+    name: containerd
+    state: restarted
+    daemon_reload: yes
+
+- name: restart kubelet
+  ansible.builtin.systemd:
+    name: kubelet
+    state: restarted
+    daemon_reload: yes
+
+- name: reload ufw
+  community.general.ufw:
+    state: reloaded
+  when: enable_ufw_firewall | default(false)

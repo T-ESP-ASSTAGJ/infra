@@ -1,16 +1,31 @@
 ---
-# Global variables for all VMs
+# Global variables for all hosts across all environments
 
-# Common packages for all environments
+# Common packages for all VMs
 common_packages:
   - curl
   - wget
   - git
   - htop
   - vim
+  - nano
+  - net-tools
+  - software-properties-common
+  - apt-transport-https
+  - ca-certificates
+  - gnupg
+  - lsb-release
 
-# Firewall rules for all VMs
+# System settings
+timezone: "UTC"
+locale: "en_US.UTF-8"
+
+# Security settings
+disable_root_login: false  # Set to true in production
+
+# Common firewall rules (UFW)
 common_firewall_rules:
-  - '22'   # SSH
-  - '80'   # HTTP
-  - '443'  # HTTPS
+  - port: "22"
+    proto: "tcp"
+    rule: "allow"
+    comment: "SSH"

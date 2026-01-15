@@ -1,0 +1,18 @@
+---
+galaxy_info:
+  author: Epitech Infrastructure Team
+  description: Common system setup and hardening for all VMs
+  company: Epitech
+  license: MIT
+  min_ansible_version: "2.14"
+  platforms:
+    - name: Ubuntu
+      versions:
+        - focal
+        - jammy
+    - name: Debian
+      versions:
+        - bullseye
+        - bookworm
+
+dependencies: []
