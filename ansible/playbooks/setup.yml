@@ -1,4 +1,7 @@
 ---
+# Initial VM Setup - Common system configuration
+# This playbook prepares VMs with base system setup
+
 - name: Initial VM Setup
   hosts: all
   become: true
@@ -13,6 +16,12 @@
       setup:
 
   roles:
-    - common
-  vars_files:
-    - ../group_vars/all.yml
+    - role: common
+      tags:
+        - common
+        - base
+
+  post_tasks:
+    - name: Verify setup completion
+      ansible.builtin.debug:
+        msg: "Base system setup completed successfully for {{ inventory_hostname }}"

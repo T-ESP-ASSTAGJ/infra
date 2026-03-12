@@ -1,0 +1,53 @@
+---
+# System prerequisites for Kubernetes
+
+- name: Disable swap permanently
+  when: disable_swap | default(true)
+  block:
+    - name: Disable swap immediately
+      ansible.builtin.command: swapoff -a
+      changed_when: false
+
+    - name: Remove swap from /etc/fstab
+      ansible.builtin.lineinfile:
+        path: /etc/fstab
+        regexp: '^\s*[^#].*\sswap\s'
+        state: absent
+
+- name: Load required kernel modules
+  community.general.modprobe:
+    name: "{{ item }}"
+    state: present
+    persistent: present
+  loop: "{{ k8s_required_modules }}"
+
+- name: Ensure kernel modules load on boot
+  ansible.builtin.copy:
+    content: |
+      # Kernel modules required for Kubernetes
+      {% for module in k8s_required_modules %}
+      {{ module }}
+      {% endfor %}
+    dest: /etc/modules-load.d/k8s.conf
+    mode: '0644'
+
+- name: Configure sysctl settings for Kubernetes
+  ansible.posix.sysctl:
+    name: "{{ item.key }}"
+    value: "{{ item.value }}"
+    state: present
+    sysctl_file: /etc/sysctl.d/k8s.conf
+    reload: yes
+  loop: "{{ k8s_sysctl_settings | dict2items }}"
+
+- name: Configure firewall for control plane
+  when: enable_ufw_firewall | default(false)
+  block:
+    - name: Configure K8s control plane firewall rules
+      community.general.ufw:
+        rule: "{{ item.rule }}"
+        port: "{{ item.port }}"
+        proto: "{{ item.proto }}"
+        comment: "{{ item.comment | default(omit) }}"
+      loop: "{{ k8s_control_plane_firewall_rules }}"
+      notify: reload ufw

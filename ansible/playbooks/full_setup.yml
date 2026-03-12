@@ -1,0 +1,9 @@
+---
+# Full Infrastructure Setup
+# This playbook runs both base setup and K8s control plane configuration
+
+- name: Full infrastructure setup
+  import_playbook: setup.yml
+
+- name: Setup Kubernetes control plane
+  import_playbook: k8s_control_plane.yml

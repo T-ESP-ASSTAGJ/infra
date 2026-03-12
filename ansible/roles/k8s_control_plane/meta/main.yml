@@ -1,0 +1,21 @@
+---
+galaxy_info:
+  author: Epitech Infrastructure Team
+  description: Kubernetes control plane setup using kubeadm
+  company: Epitech
+  license: MIT
+  min_ansible_version: "2.14"
+  platforms:
+    - name: Ubuntu
+      versions:
+        - focal
+        - jammy
+    - name: Debian
+      versions:
+        - bullseye
+        - bookworm
+
+dependencies:
+  - role: common
+    vars:
+      enable_ufw_firewall: true

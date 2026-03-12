@@ -1,0 +1,35 @@
+---
+# Kubernetes Control Plane Setup
+# This playbook installs and configures a Kubernetes control plane using kubeadm
+
+- name: Setup Kubernetes Control Plane
+  hosts: k8s_control_plane
+  become: true
+  gather_facts: true
+
+  pre_tasks:
+    - name: Wait for system to become reachable
+      wait_for_connection:
+        timeout: 300
+
+    - name: Gather facts
+      setup:
+
+    - name: Validate prerequisites
+      assert:
+        that:
+          - ansible_memtotal_mb >= 2048
+          - ansible_processor_vcpus >= 2
+        fail_msg: "System does not meet minimum requirements (2GB RAM, 2 CPU cores)"
+        success_msg: "System meets minimum requirements"
+
+  roles:
+    - role: common
+      tags:
+        - common
+        - base
+
+    - role: k8s_control_plane
+      tags:
+        - k8s
+        - k8s-control-plane

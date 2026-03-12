@@ -1,0 +1,68 @@
+---
+# Variables for Kubernetes control plane nodes
+
+# Enable UFW firewall for K8s (required for control plane)
+enable_ufw_firewall: true
+
+# Kubernetes version (check for latest stable: https://kubernetes.io/releases/)
+k8s_version: "1.29"  # Will install 1.29.x
+k8s_exact_version: "1.29.0-1.1"  # Exact package version for pinning
+
+# Container runtime
+container_runtime: "containerd"
+containerd_version: "1.7.13"
+
+# Control plane configuration
+k8s_pod_network_cidr: "10.244.0.0/16"  # Pod network CIDR for Cilium
+k8s_service_cidr: "10.96.0.0/12"       # Default service CIDR
+k8s_cluster_name: "epitech-k8s-cluster"
+k8s_control_plane_endpoint: "{{ ansible_host }}:6443"  # Single control plane for now
+
+# Cilium CNI configuration
+cilium_version: "1.15.0"
+cilium_ipam_mode: "cluster-pool"
+cilium_kube_proxy_replacement: true  # Cilium replaces kube-proxy for better performance
+cilium_hubble_enabled: true  # Enable Hubble for network observability
+
+# Control plane join settings (for future HA)
+k8s_certificate_key_retention: "2h"  # How long cert key is valid for joining control planes
+
+# Kubeconfig settings
+k8s_admin_user: "{{ ansible_user }}"  # User to configure kubectl for
+k8s_kubeconfig_path: "/home/{{ ansible_user }}/.kube/config"
+
+# Firewall settings for K8s control plane
+k8s_control_plane_firewall_rules:
+  - port: "6443"
+    proto: "tcp"
+    rule: "allow"
+    comment: "K8s API Server"
+  - port: "2379:2380"
+    proto: "tcp"
+    rule: "allow"
+    comment: "etcd server client API"
+  - port: "10250"
+    proto: "tcp"
+    rule: "allow"
+    comment: "Kubelet API"
+  - port: "10259"
+    proto: "tcp"
+    rule: "allow"
+    comment: "kube-scheduler"
+  - port: "10257"
+    proto: "tcp"
+    rule: "allow"
+    comment: "kube-controller-manager"
+
+# System prerequisites
+k8s_required_modules:
+  - overlay
+  - br_netfilter
+
+k8s_sysctl_settings:
+  net.bridge.bridge-nf-call-iptables: 1
+  net.bridge.bridge-nf-call-ip6tables: 1
+  net.ipv4.ip_forward: 1
+
+# Swap must be disabled for Kubernetes
+disable_swap: true
