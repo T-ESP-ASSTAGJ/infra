@@ -34,6 +34,34 @@ resource "azurerm_subnet" "subnet" {
   address_prefixes     = ["10.0.1.0/24"]
 }
 
+resource "azurerm_subnet" "subnet-database" {
+  name                 = "example-subnet"
+  resource_group_name  = azurerm_resource_group.rg.name
+  virtual_network_name = azurerm_virtual_network.vnet.name
+  address_prefixes     = ["10.0.2.0/24"]
+
+  delegation {
+    name = "delegation"
+
+    service_delegation {
+      name    = "Microsoft.DBforPostgreSQL/flexibleServers"
+      actions = ["Microsoft.Network/virtualNetworks/subnets/join/action"]
+    }
+  }
+}
+
+resource "azurerm_private_dns_zone" "postgres" {
+  name                = "privatelink.postgres.database.azure.com"
+  resource_group_name = azurerm_resource_group.rg.name
+}
+
+resource "azurerm_private_dns_zone_virtual_network_link" "postgres" {
+  name                  = "postgres-databse-virtual-network-dns"
+  resource_group_name   = azurerm_resource_group.rg.name
+  private_dns_zone_name = azurerm_private_dns_zone.postgres.name
+  virtual_network_id    = azurerm_virtual_network.vnet.id
+}
+
 resource "azurerm_network_security_group" "nsg" {
   name = "${var.project_name}nsg"
   location = azurerm_resource_group.rg.location
@@ -103,6 +131,7 @@ resource "azurerm_linux_virtual_machine" "vm" {
   }
 }
 
+
 resource "local_file" "ansible_inventory" {
   content = templatefile("${path.module}/inventory.tpl", {
     vm_ip         = azurerm_public_ip.public_ip.ip_address
@@ -116,4 +145,33 @@ resource "local_file" "ansible_inventory" {
     azurerm_linux_virtual_machine.vm,
     azurerm_public_ip.public_ip
   ]
+}
+
+resource "azurerm_postgresql_flexible_server" "server-database" {
+  name                = "${var.project_name}-postgresql-server-1"
+  resource_group_name = azurerm_resource_group.rg.name
+  location            = azurerm_resource_group.rg.location
+  version                = "13"
+
+  administrator_login    = var.db_admin_login
+  administrator_password = var.db_admin_password
+
+  backup_retention_days = 7
+
+  storage_mb             = 32768
+  sku_name               = "B_Standard_B1ms"
+  depends_on = [azurerm_private_dns_zone_virtual_network_link.postgres]
+  private_dns_zone_id = azurerm_private_dns_zone.postgres.id
+  delegated_subnet_id = azurerm_subnet.subnet-database.id
+}
+
+resource "azurerm_postgresql_flexible_server_database" "database-jamly" {
+  name                = "${var.project_name}-database-1"
+  server_id           = azurerm_postgresql_flexible_server.server-database.id
+  collation           = "en_US.utf8"
+  charset             = "UTF8"
+
+  lifecycle {
+    prevent_destroy = true
+  }
 }
