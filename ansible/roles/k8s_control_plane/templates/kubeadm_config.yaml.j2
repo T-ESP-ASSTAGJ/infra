@@ -9,7 +9,7 @@ nodeRegistration:
   criSocket: unix:///var/run/containerd/containerd.sock
   imagePullPolicy: IfNotPresent
   name: {{ ansible_hostname }}
-  taints: null  # Allow pods on control plane (single node setup)
+  taints: []  # Allow pods on control plane (single node setup)
 ---
 apiVersion: kubeadm.k8s.io/v1beta3
 kind: ClusterConfiguration
@@ -37,3 +37,4 @@ etcd:
 apiVersion: kubelet.config.k8s.io/v1beta1
 kind: KubeletConfiguration
 cgroupDriver: systemd
+resolvConf: /run/systemd/resolve/resolv.conf

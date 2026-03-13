@@ -20,22 +20,26 @@
         kubeadm init
         --config=/tmp/kubeadm-config.yaml
         --upload-certs
+        --skip-phases=addon/kube-proxy
         --v=5
       register: kubeadm_init
       changed_when: "'Your Kubernetes control-plane has initialized successfully' in kubeadm_init.stdout"
-      retries: 3
-      delay: 10
-      until: kubeadm_init.rc == 0
-      async: 600
-      poll: 10
+
+    - name: Increase kube-apiserver liveness probe threshold for CNI initialization
+      ansible.builtin.replace:
+        path: /etc/kubernetes/manifests/kube-apiserver.yaml
+        regexp: '(failureThreshold:) 8'
+        replace: '\1 30'
 
     - name: Wait for API server to be ready
-      ansible.builtin.wait_for:
-        host: "{{ k8s_advertise_address | default(ansible_default_ipv4.address) }}"
-        port: 6443
-        timeout: 300
-        delay: 5
-      when: k8s_admin_conf.stat.exists == false
+      ansible.builtin.uri:
+        url: "https://{{ k8s_advertise_address | default(ansible_default_ipv4.address) }}:6443/healthz"
+        validate_certs: false
+        status_code: 200
+      register: apiserver_health
+      retries: 30
+      delay: 10
+      until: apiserver_health.status == 200
 
     - name: Save kubeadm init output
       ansible.builtin.copy:

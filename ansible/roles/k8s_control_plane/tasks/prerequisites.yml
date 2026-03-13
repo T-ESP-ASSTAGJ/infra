@@ -40,6 +40,15 @@
     reload: yes
   loop: "{{ k8s_sysctl_settings | dict2items }}"
 
+- name: Allow Kubernetes CIDRs through UFW
+  community.general.ufw:
+    rule: allow
+    from_ip: "{{ item }}"
+  loop:
+    - "{{ k8s_pod_network_cidr }}"
+    - "{{ k8s_service_cidr }}"
+  notify: reload ufw
+
 - name: Configure firewall for control plane
   when: enable_ufw_firewall | default(false)
   block:
