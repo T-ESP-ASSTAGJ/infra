@@ -1,11 +1,12 @@
-[azure_vms]
-${vm_name} ansible_host=${vm_ip} k8s_advertise_address=${vm_private_ip}
-
 [k8s_control_plane]
-${vm_name}
+jamlycp ansible_host=${cp_public_ip} k8s_advertise_address=${cp_private_ip}
 
 [k8s_workers]
-# Add worker nodes here when available
+jamlyw1 ansible_host=${w1_private_ip} ansible_ssh_common_args='-o ProxyJump=${admin_user}@${cp_public_ip}'
+
+[azure_vms:children]
+k8s_control_plane
+k8s_workers
 
 [azure_vms:vars]
 ansible_user=${admin_user}
