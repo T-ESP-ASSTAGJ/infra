@@ -1,0 +1,31 @@
+- name: Check if worker already joined cluster
+  ansible.builtin.stat:
+    path: /etc/kubernetes/kubelet.conf
+  register: k8s_kubelet_conf
+
+- name: Lire la commande join depuis le control plane
+  ansible.builtin.slurp:
+    src: /root/k8s-worker-join-command.sh
+  register: join_command_raw
+  delegate_to: "{{ groups['k8s_control_plane'][0] }}"
+
+- name: Décoder la commande
+  ansible.builtin.set_fact:
+    join_command: "{{ join_command_raw.content | b64decode | trim }}"
+
+- name: Exécuter le join du worker
+  ansible.builtin.command:
+    cmd: "{{ join_command }}"
+  when: not k8s_kubelet_conf.stat.exists
+
+- name: Configure firewall for worker  # ← ici
+  when: enable_ufw_firewall | default(false)
+  block:
+    - name: Configure K8s worker firewall rules
+      community.general.ufw:
+        rule: "{{ item.rule }}"
+        port: "{{ item.port }}"
+        proto: "{{ item.proto }}"
+        comment: "{{ item.comment | default(omit) }}"
+      loop: "{{ k8s_worker_firewall_rules }}"
+      notify: reload ufw

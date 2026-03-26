@@ -1,0 +1,9 @@
+k8s_worker_firewall_rules:
+  - rule: allow
+    port: "10250"
+    proto: tcp
+    comment: "Kubelet API"
+  - rule: allow
+    port: "30000:32767"
+    proto: tcp
+    comment: "NodePort range"
