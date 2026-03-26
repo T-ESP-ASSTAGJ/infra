@@ -172,6 +172,6 @@ resource "azurerm_postgresql_flexible_server_database" "database-jamly" {
   charset             = "UTF8"
 
   lifecycle {
-    prevent_destroy = true
+    prevent_destroy = false
   }
 }
