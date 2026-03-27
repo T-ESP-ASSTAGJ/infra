@@ -16,9 +16,16 @@
     mode: '0755'
 
 - name: Generate default containerd configuration
-  ansible.builtin.shell: containerd config default > /etc/containerd/config.toml
+  ansible.builtin.shell: containerd config default | tee /etc/containerd/config.toml
   args:
     creates: /etc/containerd/config.toml
+  register: containerd_config
+
+- name: Verify containerd config file exists
+  ansible.builtin.stat:
+    path: /etc/containerd/config.toml
+  register: containerd_config_stat
+  failed_when: not containerd_config_stat.stat.exists
 
 - name: Configure containerd to use systemd cgroup driver
   ansible.builtin.lineinfile:

@@ -13,6 +13,9 @@
     - k8s
     - k8s-container-runtime
 
+- name: Flush handlers to restart containerd before cluster init
+  ansible.builtin.meta: flush_handlers
+
 - name: Include Kubernetes packages installation
   ansible.builtin.include_tasks: kubernetes.yml
   tags:

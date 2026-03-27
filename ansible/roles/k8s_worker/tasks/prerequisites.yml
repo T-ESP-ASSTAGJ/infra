@@ -49,14 +49,14 @@
     - "{{ k8s_service_cidr }}"
   notify: reload ufw
 
-- name: Configure firewall for control plane
+- name: Configure firewall for worker
   when: enable_ufw_firewall | default(false)
   block:
-    - name: Configure K8s control plane firewall rules
+    - name: Configure K8s worker firewall rules
       community.general.ufw:
         rule: "{{ item.rule }}"
         port: "{{ item.port }}"
         proto: "{{ item.proto }}"
         comment: "{{ item.comment | default(omit) }}"
-      loop: "{{ k8s_control_plane_firewall_rules }}"
+      loop: "{{ k8s_worker_firewall_rules }}"
       notify: reload ufw
