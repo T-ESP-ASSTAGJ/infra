@@ -14,3 +14,18 @@ variable "tags" {
   type        = map(string)
   default     = {}
 }
+variable "db_admin_login" {
+  description = "Database username"
+  type        = string
+  sensitive   = false
+}
+variable "db_admin_password" {
+  description = "Database password"
+  type        = string
+  sensitive   = false
+}
+variable "db_name" {
+  description = "Database name"
+  type        = string
+  sensitive   = false
+}

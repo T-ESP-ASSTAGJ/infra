@@ -7,3 +7,6 @@ output "admin_username" {
   description = "The admin username for SSH access"
   value       = azurerm_linux_virtual_machine.vm.admin_username
 }
+output "db_fqdn" {
+  value = azurerm_postgresql_flexible_server.server-database.fqdn
+}
