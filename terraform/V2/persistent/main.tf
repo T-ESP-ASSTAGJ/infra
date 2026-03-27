@@ -338,6 +338,12 @@ resource "azurerm_storage_container" "storage_container" {
   storage_account_name  = azurerm_storage_account.storage_account.name
 }
 
+resource "azurerm_storage_share" "file_share" {
+  name               = "${var.project_name}-share"
+  storage_account_name = azurerm_storage_account.storage_account.name
+  quota              = 5
+}
+
 # Cloudflare DNS Records (pointing to the static Application Gateway IP)
 resource "cloudflare_record" "web" {
   count   = var.custom_domain != "" && var.cloudflare_zone_id != "" ? 1 : 0
