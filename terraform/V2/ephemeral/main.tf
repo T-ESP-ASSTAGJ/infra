@@ -49,6 +49,11 @@ data "azurerm_network_security_group" "vm_nsg" {
   resource_group_name = var.persistent_resource_group_name
 }
 
+data "azurerm_virtual_network" "persistent" {
+  name                = "${trimsuffix(var.persistent_resource_group_name, "-rg")}-vnet"
+  resource_group_name = var.persistent_resource_group_name
+}
+
 resource "azurerm_network_security_rule" "vxlan" {
   name                        = "VXLAN-Cilium"
   priority                    = 1100
@@ -225,6 +230,66 @@ resource "azurerm_linux_virtual_machine" "worker" {
     offer     = "0001-com-ubuntu-server-jammy"
     sku       = "22_04-lts-gen2"
     version   = "latest"
+  }
+}
+
+resource "azurerm_subnet" "subnet-database" {
+  name                 = "${local.name_prefix}-db-subnet"
+  resource_group_name  = var.persistent_resource_group_name
+  virtual_network_name = data.azurerm_virtual_network.persistent.name
+  address_prefixes     = ["10.0.3.0/24"]
+
+  delegation {
+    name = "delegation"
+
+    service_delegation {
+      name    = "Microsoft.DBforPostgreSQL/flexibleServers"
+      actions = ["Microsoft.Network/virtualNetworks/subnets/join/action"]
+    }
+  }
+}
+
+resource "azurerm_private_dns_zone" "postgres" {
+  name                = "privatelink.postgres.database.azure.com"
+  resource_group_name = var.persistent_resource_group_name
+}
+
+resource "azurerm_private_dns_zone_virtual_network_link" "postgres" {
+  name                  = "postgres-databse-virtual-network-dns"
+  resource_group_name   = var.persistent_resource_group_name
+  private_dns_zone_name = azurerm_private_dns_zone.postgres.name
+  virtual_network_id    = data.azurerm_virtual_network.persistent.id
+}
+
+resource "azurerm_postgresql_flexible_server" "server-database" {
+  name                = "${var.project_name}-postgresql-server-1"
+  resource_group_name = azurerm_resource_group.ephemeral.name
+  location            = azurerm_resource_group.ephemeral.location
+  version                = "13"
+
+  administrator_login    = var.db_admin_login
+  administrator_password = var.db_admin_password
+
+  backup_retention_days = 7
+
+  storage_mb             = 32768
+  sku_name               = "B_Standard_B1ms"
+
+  public_network_access_enabled = false
+  delegated_subnet_id           = azurerm_subnet.subnet-database.id
+  private_dns_zone_id           = azurerm_private_dns_zone.postgres.id
+
+  depends_on = [azurerm_private_dns_zone_virtual_network_link.postgres]
+}
+
+resource "azurerm_postgresql_flexible_server_database" "database-jamly" {
+  name                = "${var.project_name}-database-1"
+  server_id           = azurerm_postgresql_flexible_server.server-database.id
+  collation           = "en_US.utf8"
+  charset             = "UTF8"
+
+  lifecycle {
+    prevent_destroy = false
   }
 }
 
