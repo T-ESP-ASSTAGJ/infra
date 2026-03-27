@@ -1,0 +1,29 @@
+k8s_version: "1.29"
+k8s_exact_version: "1.29.0-1.1"
+
+container_runtime: "containerd"
+
+k8s_pod_network_cidr: "10.244.0.0/16"
+k8s_service_cidr: "10.96.0.0/12"
+
+disable_swap: true
+
+k8s_required_modules:
+  - overlay
+  - br_netfilter
+
+k8s_sysctl_settings:
+  net.bridge.bridge-nf-call-iptables: 1
+  net.bridge.bridge-nf-call-ip6tables: 1
+  net.ipv4.ip_forward: 1
+
+enable_ufw_firewall: true
+k8s_worker_firewall_rules:
+  - rule: allow
+    port: "10250"
+    proto: tcp
+    comment: "Kubelet API"
+  - rule: allow
+    port: "30000:32767"
+    proto: tcp
+    comment: "NodePort range"

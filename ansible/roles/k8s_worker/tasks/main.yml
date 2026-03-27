@@ -1,0 +1,26 @@
+---
+# Main orchestrator for Kubernetes worker node setup
+
+- name: Include prerequisites tasks
+  ansible.builtin.include_tasks: prerequisites.yml
+  tags:
+    - k8s
+    - k8s-prerequisites
+
+- name: Include container runtime setup
+  ansible.builtin.include_tasks: container_runtime.yml
+  tags:
+    - k8s
+    - k8s-container-runtime
+
+- name: Include Kubernetes packages installation
+  ansible.builtin.include_tasks: kubernetes.yml
+  tags:
+    - k8s
+    - k8s-packages
+
+- name: Include Worker on cluster with join
+  ansible.builtin.include_tasks: join.yml
+  tags:
+    - k8s
+    - k8s-join

@@ -7,3 +7,6 @@
 
 - name: Setup Kubernetes control plane
   import_playbook: k8s_control_plane.yml
+
+- name: Setup Kubernetes workers
+  import_playbook: k8s_worker.yml
