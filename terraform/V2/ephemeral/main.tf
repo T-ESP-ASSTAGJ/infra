@@ -265,6 +265,7 @@ resource "azurerm_postgresql_flexible_server" "server-database" {
   name                = "${var.project_name}-postgresql-server-1"
   resource_group_name = azurerm_resource_group.ephemeral.name
   location            = azurerm_resource_group.ephemeral.location
+  zone                = "3"
   version                = "13"
 
   administrator_login    = var.db_admin_login
@@ -296,7 +297,7 @@ resource "azurerm_postgresql_flexible_server_database" "database-jamly" {
 # ── Ansible Inventory ─────────────────────────────────────────────────────────
 
 resource "local_file" "ansible_inventory" {
-  content = templatefile("${path.module}/../inventory.tpl", {
+  content = templatefile("${path.module}/../templates/inventory.tpl", {
     cp_public_ip  = azurerm_public_ip.control_plane.ip_address
     cp_private_ip = azurerm_network_interface.control_plane.private_ip_address
     w1_private_ip = azurerm_network_interface.worker.private_ip_address
