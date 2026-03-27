@@ -237,6 +237,6 @@ resource "local_file" "ansible_inventory" {
     w1_private_ip = azurerm_network_interface.worker.private_ip_address
     admin_user    = var.admin_username
   })
-  filename        = "${path.module}/../../ansible/inventory/hosts.ini"
+  filename        = "${path.module}/../../../ansible/inventory/hosts.ini"
   file_permission = "0600"
 }
