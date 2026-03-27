@@ -36,4 +36,7 @@ module "ephemeral" {
   persistent_resource_group_name = module.persistent.resource_group_name
   appgw_backend_pool_id          = module.persistent.appgw_backend_pool_id
   ssh_public_key                 = var.ssh_public_key
+  db_admin_login = "dummy" # Not used, but required by the module interface
+  db_admin_password = "dummy" # Not used, but required by the module interface
+  db_name = "dummy" # Not used, but required by the module interface
 }
