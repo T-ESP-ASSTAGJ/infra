@@ -47,3 +47,8 @@ output "appgw_identity_id" {
   description = "ID of the App Gateway managed identity — use for additional Key Vault access policies"
   value       = azurerm_user_assigned_identity.appgw.id
 }
+
+output "storage_container_url" {
+  description = "Public URL of the storage container"
+  value       = "https://${azurerm_storage_account.storage_account.name}.blob.core.windows.net/${azurerm_storage_container.storage_container.name}"
+}

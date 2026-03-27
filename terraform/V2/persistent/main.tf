@@ -323,6 +323,21 @@ resource "azurerm_key_vault" "certs" {
   }
 }
 
+
+resource "azurerm_storage_account" "storage_account" {
+  name                     = "${replace(var.project_name, "-", "")}sa"
+  resource_group_name      = azurerm_resource_group.rg.name
+  location                 = azurerm_resource_group.rg.location
+  account_tier             = "Standard"
+  account_replication_type = "LRS"
+}
+
+resource "azurerm_storage_container" "storage_container" {
+  name                  = "${var.project_name}-content"
+  container_access_type = "blob"
+  storage_account_name  = azurerm_storage_account.storage_account.name
+}
+
 # Cloudflare DNS Records (pointing to the static Application Gateway IP)
 resource "cloudflare_record" "web" {
   count   = var.custom_domain != "" && var.cloudflare_zone_id != "" ? 1 : 0
