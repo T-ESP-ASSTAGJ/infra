@@ -272,7 +272,7 @@ resource "azurerm_application_gateway" "appgw" {
 
 # Key Vault for SSL certificates
 resource "azurerm_key_vault" "certs" {
-  name                       = "${var.project_name}-kv"
+  name                       = "${var.project_name}-keyvau"
   location                   = azurerm_resource_group.rg.location
   resource_group_name        = azurerm_resource_group.rg.name
   tenant_id                  = data.azurerm_client_config.current.tenant_id
