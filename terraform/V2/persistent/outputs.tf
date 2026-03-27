@@ -47,3 +47,24 @@ output "appgw_identity_id" {
   description = "ID of the App Gateway managed identity — use for additional Key Vault access policies"
   value       = azurerm_user_assigned_identity.appgw.id
 }
+
+output "storage_container_url" {
+  description = "Public URL of the storage container"
+  value       = "https://${azurerm_storage_account.storage_account.name}.blob.core.windows.net/${azurerm_storage_container.storage_container.name}"
+}
+
+output "storage_account_name" {
+  description = "AZURE_STORAGE_ACCOUNT_NAME"
+  value       = azurerm_storage_account.storage_account.name
+}
+
+output "storage_account_key" {
+  description = "AZURE_STORAGE_ACCOUNT_KEY"
+  value       = azurerm_storage_account.storage_account.primary_access_key
+  sensitive   = true
+}
+
+output "file_share_name" {
+  description = "AZURE_FILE_SHARE_NAME"
+  value       = azurerm_storage_share.file_share.name
+}
