@@ -1,6 +1,13 @@
 ---
 # Install and configure CNI plugin (Cilium)
 
+- name: Apply Gateway API CRDs
+  ansible.builtin.command: >
+    kubectl apply -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.2.0/standard-install.yaml
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  changed_when: false
+
 - name: Check if CNI is already installed
   ansible.builtin.command: kubectl get pods -n kube-system -l k8s-app=cilium
   environment:
@@ -74,6 +81,7 @@
         --set k8sServiceHost={{ k8s_advertise_address | default(ansible_default_ipv4.address) }}
         --set k8sServicePort=6443
         --set routing-mode=tunnel
+        --set gatewayAPI.enabled=true
         {{ '--set hubble.enabled=' + (cilium_hubble_enabled | string | lower) if cilium_hubble_enabled is defined else '' }}
         {{ '--set hubble.relay.enabled=' + (cilium_hubble_enabled | string | lower) if cilium_hubble_enabled is defined else '' }}
         {{ '--set hubble.ui.enabled=' + (cilium_hubble_enabled | string | lower) if cilium_hubble_enabled is defined else '' }}
@@ -91,6 +99,38 @@
       retries: 30
       delay: 10
       changed_when: false
+
+- name: Copy Gateway manifest to control plane
+  ansible.builtin.copy:
+    src: gateway.yaml
+    dest: /tmp/gateway.yaml
+    mode: '0644'
+
+- name: Apply Cilium Gateway manifest
+  ansible.builtin.command: kubectl apply -f /tmp/gateway.yaml
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  changed_when: false
+
+- name: Wait for Cilium to create the Gateway service
+  ansible.builtin.command: >
+    kubectl get svc cilium-gateway-jamly-gateway -n kube-system
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  register: gateway_svc
+  until: gateway_svc.rc == 0
+  retries: 20
+  delay: 5
+  changed_when: false
+
+- name: Pin Gateway NodePort to 30080
+  ansible.builtin.command: >
+    kubectl patch svc cilium-gateway-jamly-gateway -n kube-system
+    --type=json
+    -p='[{"op":"replace","path":"/spec/ports/0/nodePort","value":30080}]'
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  changed_when: false
 
 - name: Verify CNI is working
   ansible.builtin.command: kubectl get nodes -o wide
