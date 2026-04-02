@@ -132,6 +132,54 @@
     KUBECONFIG: /etc/kubernetes/admin.conf
   changed_when: false
 
+- name: Copy namespaces manifest to control plane
+  ansible.builtin.copy:
+    src: namespaces.yaml
+    dest: /tmp/namespaces.yaml
+    mode: '0644'
+
+- name: Apply namespaces
+  ansible.builtin.command: kubectl apply -f /tmp/namespaces.yaml
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  changed_when: false
+
+- name: Copy API deployment manifest to control plane
+  ansible.builtin.copy:
+    src: api-deployment.yaml
+    dest: /tmp/api-deployment.yaml
+    mode: '0644'
+
+- name: Apply API deployment
+  ansible.builtin.command: kubectl apply -f /tmp/api-deployment.yaml
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  changed_when: false
+
+- name: Copy API service manifest to control plane
+  ansible.builtin.copy:
+    src: api-service.yaml
+    dest: /tmp/api-service.yaml
+    mode: '0644'
+
+- name: Apply API service
+  ansible.builtin.command: kubectl apply -f /tmp/api-service.yaml
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  changed_when: false
+
+- name: Copy API HTTPRoute manifest to control plane
+  ansible.builtin.copy:
+    src: httproute-api.yaml
+    dest: /tmp/httproute-api.yaml
+    mode: '0644'
+
+- name: Apply API HTTPRoute
+  ansible.builtin.command: kubectl apply -f /tmp/httproute-api.yaml
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  changed_when: false
+
 - name: Verify CNI is working
   ansible.builtin.command: kubectl get nodes -o wide
   environment:

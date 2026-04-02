@@ -29,3 +29,11 @@
         comment: "{{ item.comment | default(omit) }}"
       loop: "{{ k8s_worker_firewall_rules }}"
       notify: reload ufw
+
+- name: Label worker node
+  ansible.builtin.command: >
+    kubectl label node {{ ansible_hostname }} node-role.kubernetes.io/worker=""  --overwrite
+  delegate_to: "{{ groups['k8s_control_plane'][0] }}"
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  changed_when: false

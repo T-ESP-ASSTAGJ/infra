@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: jamly-api
+  namespace: jamly-api
+spec:
+  selector:
+    app: jamly-api
+  ports:
+  - port: 80
+    targetPort: 80

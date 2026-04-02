@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jamly-api
+  namespace: jamly-api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: jamly-api
+  template:
+    metadata:
+      labels:
+        app: jamly-api
+    spec:
+      nodeSelector:
+        node-role.kubernetes.io/worker: ""
+      containers:
+      - name: api
+        image: ghcr.io/t-esp-asstagj/api:staging
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 80
