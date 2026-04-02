@@ -235,12 +235,27 @@ resource "azurerm_application_gateway" "appgw" {
     name = "default-pool"
   }
 
+  probe {
+    name                = "k8s-nodeport-probe"
+    host                = "127.0.0.1"
+    interval            = 30
+    protocol            = "Http"
+    path                = "/"
+    timeout             = 30
+    unhealthy_threshold = 3
+
+    match {
+      status_code = ["200-404"]
+    }
+  }
+
   backend_http_settings {
     name                  = "default-http-settings"
     cookie_based_affinity = "Disabled"
-    port                  = 80
+    port                  = 30080
     protocol              = "Http"
     request_timeout       = 60
+    probe_name            = "k8s-nodeport-probe"
   }
 
   http_listener {
