@@ -1,0 +1,12 @@
+---
+- name: Install ArgoCD via Helm
+  ansible.builtin.include_tasks: install_argocd.yml
+  tags:
+    - argocd
+    - argocd-install
+
+- name: Bootstrap App of Apps
+  ansible.builtin.include_tasks: bootstrap.yml
+  tags:
+    - argocd
+    - argocd-bootstrap

@@ -6,3 +6,6 @@ k8s_cluster_name: "epitech-k8s-cluster"
 
 # Cilium CNI configuration
 cilium_hubble_enabled: true
+
+# enable Helm install
+install_helm: true

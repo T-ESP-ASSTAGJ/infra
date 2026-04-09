@@ -69,6 +69,41 @@
         policy: allow
         direction: outgoing
 
+- name: Install Helm
+  when: install_helm | default(false)
+  block:
+    - name: Check if Helm is already installed
+      ansible.builtin.stat:
+        path: /usr/local/bin/helm
+      register: helm_binary
+
+    - name: Download and install Helm
+      when: not helm_binary.stat.exists
+      block:
+        - name: Download Helm installation script
+          ansible.builtin.get_url:
+            url: https://raw.githubusercontent.com/helm/helm/master/scripts/get-helm-3
+            dest: /tmp/get_helm.sh
+            mode: '0755'
+
+        - name: Run Helm installation script
+          ansible.builtin.command: /tmp/get_helm.sh
+          changed_when: true
+
+        - name: Remove Helm installation script
+          ansible.builtin.file:
+            path: /tmp/get_helm.sh
+            state: absent
+
+    - name: Verify Helm is functional
+      ansible.builtin.command: helm version --short
+      changed_when: false
+      register: helm_version
+
+    - name: Display Helm version
+      ansible.builtin.debug:
+        msg: "Helm installed: {{ helm_version.stdout }}"
+
 - name: Ensure system is ready
   ansible.builtin.debug:
     msg: "Common setup completed successfully"
