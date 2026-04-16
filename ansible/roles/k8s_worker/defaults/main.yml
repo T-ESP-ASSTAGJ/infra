@@ -1,5 +1,5 @@
-k8s_version: "1.29"
-k8s_exact_version: "1.29.0-1.1"
+k8s_version: "1.30"
+k8s_exact_version: "1.30.0-1.1"
 
 container_runtime: "containerd"
 

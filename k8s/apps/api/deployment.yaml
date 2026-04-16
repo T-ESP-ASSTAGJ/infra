@@ -21,3 +21,9 @@ spec:
         imagePullPolicy: Always
         ports:
         - containerPort: 80
+        env:
+        - name: APP_ENV
+          value: "staging"
+        envFrom:
+        - secretRef:
+            name: jamly-api-secrets

@@ -68,3 +68,23 @@ output "file_share_name" {
   description = "AZURE_FILE_SHARE_NAME"
   value       = azurerm_storage_share.file_share.name
 }
+
+output "eso_identity_id" {
+  description = "Resource ID of the ESO managed identity — assign to worker VM in the ephemeral layer"
+  value       = azurerm_user_assigned_identity.eso.id
+}
+
+output "eso_identity_client_id" {
+  description = "Client ID of the ESO managed identity — used in the SecretStore manifest"
+  value       = azurerm_user_assigned_identity.eso.client_id
+}
+
+output "db_subnet_id" {
+  description = "ID of the delegated DB subnet — pass to ephemeral layer"
+  value       = azurerm_subnet.subnet-database.id
+}
+
+output "private_dns_zone_postgres_id" {
+  description = "ID of the PostgreSQL private DNS zone — pass to ephemeral layer"
+  value       = azurerm_private_dns_zone.postgres.id
+}

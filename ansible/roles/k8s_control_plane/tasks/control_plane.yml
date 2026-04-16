@@ -41,6 +41,22 @@
       delay: 10
       until: apiserver_health.status == 200
 
+    - name: Patch CoreDNS to forward to Azure upstream DNS
+      ansible.builtin.shell: |
+        kubectl get configmap coredns -n kube-system -o yaml | \
+        sed 's|forward . /etc/resolv.conf|forward . {{ k8s_upstream_dns }}|' | \
+        kubectl apply -f -
+      environment:
+        KUBECONFIG: /etc/kubernetes/admin.conf
+      changed_when: true
+
+    - name: Restart CoreDNS to pick up new config
+      ansible.builtin.command: >
+        kubectl rollout restart deployment/coredns -n kube-system
+      environment:
+        KUBECONFIG: /etc/kubernetes/admin.conf
+      changed_when: true
+
     - name: Save kubeadm init output
       ansible.builtin.copy:
         content: "{{ kubeadm_init.stdout }}"

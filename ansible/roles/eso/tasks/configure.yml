@@ -1,0 +1,41 @@
+---
+- name: Copy SecretStore manifest
+  ansible.builtin.template:
+    src: secretstore.yaml.j2
+    dest: /tmp/secretstore.yaml
+    mode: '0644'
+
+- name: Clear kubectl API discovery cache
+  ansible.builtin.file:
+    path: /root/.kube/cache/discovery
+    state: absent
+
+- name: Wait for external-secrets.io API group to be discoverable
+  ansible.builtin.command: >
+    kubectl api-resources --api-group=external-secrets.io
+    --kubeconfig /etc/kubernetes/admin.conf
+  register: eso_api_ready
+  until: '"SecretStore" in eso_api_ready.stdout'
+  retries: 24
+  delay: 5
+  changed_when: false
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+
+- name: Apply SecretStore
+  ansible.builtin.command: kubectl apply -f /tmp/secretstore.yaml
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  changed_when: false
+
+- name: Copy ExternalSecret manifest
+  ansible.builtin.copy:
+    src: externalsecret.yaml
+    dest: /tmp/externalsecret.yaml
+    mode: '0644'
+
+- name: Apply ExternalSecret
+  ansible.builtin.command: kubectl apply -f /tmp/externalsecret.yaml
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  changed_when: false

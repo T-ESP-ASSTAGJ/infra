@@ -5,6 +5,10 @@ jamlyw1 ansible_host=${w1_private_ip} k8s_advertise_address=${w1_private_ip}
 [k8s_control_plane]
 jamlycp
 
+[k8s_control_plane:vars]
+eso_identity_client_id=${eso_identity_client_id}
+eso_keyvault_url=${eso_keyvault_url}
+
 [k8s_workers]
 jamlyw1
 
