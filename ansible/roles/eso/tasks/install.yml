@@ -1,0 +1,33 @@
+---
+- name: Add External Secrets Operator Helm repo
+  ansible.builtin.command: helm repo add external-secrets https://charts.external-secrets.io
+  changed_when: false
+
+- name: Update Helm repos
+  ansible.builtin.command: helm repo update
+  changed_when: false
+
+- name: Install External Secrets Operator
+  ansible.builtin.command: >
+    helm upgrade --install external-secrets external-secrets/external-secrets
+    --namespace {{ eso_namespace }}
+    --create-namespace
+    --set installCRDs={{ eso_install_crds | lower }}
+    --set webhook.failurePolicy=Ignore
+    --timeout 10m0s
+    --wait
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  changed_when: false
+
+- name: Wait for ESO API group to be discoverable
+  ansible.builtin.shell: >
+    kubectl api-resources --api-group=external-secrets.io
+    --kubeconfig /etc/kubernetes/admin.conf | grep -c SecretStore
+  register: eso_api_ready
+  until: eso_api_ready.stdout | int > 0
+  retries: 12
+  delay: 5
+  changed_when: false
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf

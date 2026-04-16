@@ -1,0 +1,8 @@
+---
+- name: Include ESO installation
+  ansible.builtin.include_tasks: install.yml
+  tags: [eso, eso-install]
+
+- name: Include ESO configuration (SecretStore + ExternalSecret)
+  ansible.builtin.include_tasks: configure.yml
+  tags: [eso, eso-configure]

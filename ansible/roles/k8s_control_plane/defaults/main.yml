@@ -2,8 +2,8 @@
 # Default variables for k8s_control_plane role
 # Override these in group_vars/k8s_control_plane.yml
 
-k8s_version: "1.29"
-k8s_exact_version: "1.29.0-1.1"
+k8s_version: "1.30"
+k8s_exact_version: "1.30.0-1.1"
 
 container_runtime: "containerd"
 
@@ -51,6 +51,8 @@ k8s_control_plane_firewall_rules:
     comment: "kube-controller-manager"
 
 k8s_certificate_key_retention: "2h"
+
+k8s_upstream_dns: "168.63.129.16"  # Azure internal DNS
 
 # CNI Configuration (Cilium)
 cilium_version: "1.18.6"

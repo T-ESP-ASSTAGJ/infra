@@ -1,0 +1,7 @@
+---
+galaxy_info:
+  role_name: eso
+  author: ecole
+  min_ansible_version: "2.14"
+dependencies:
+  - role: helm

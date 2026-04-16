@@ -14,7 +14,11 @@ terraform {
 }
 
 provider "azurerm" {
-  features {}
+  features {
+    resource_group {
+      prevent_deletion_if_contains_resources = false
+    }
+  }
 }
 
 locals {
@@ -231,34 +235,11 @@ resource "azurerm_linux_virtual_machine" "worker" {
     sku       = "22_04-lts-gen2"
     version   = "latest"
   }
-}
 
-resource "azurerm_subnet" "subnet-database" {
-  name                 = "${local.name_prefix}-db-subnet"
-  resource_group_name  = var.persistent_resource_group_name
-  virtual_network_name = data.azurerm_virtual_network.persistent.name
-  address_prefixes     = ["10.0.3.0/24"]
-
-  delegation {
-    name = "delegation"
-
-    service_delegation {
-      name    = "Microsoft.DBforPostgreSQL/flexibleServers"
-      actions = ["Microsoft.Network/virtualNetworks/subnets/join/action"]
-    }
+  identity {
+    type         = "UserAssigned"
+    identity_ids = [var.eso_identity_id]
   }
-}
-
-resource "azurerm_private_dns_zone" "postgres" {
-  name                = "privatelink.postgres.database.azure.com"
-  resource_group_name = var.persistent_resource_group_name
-}
-
-resource "azurerm_private_dns_zone_virtual_network_link" "postgres" {
-  name                  = "postgres-databse-virtual-network-dns"
-  resource_group_name   = var.persistent_resource_group_name
-  private_dns_zone_name = azurerm_private_dns_zone.postgres.name
-  virtual_network_id    = data.azurerm_virtual_network.persistent.id
 }
 
 resource "azurerm_postgresql_flexible_server" "server-database" {
@@ -266,21 +247,19 @@ resource "azurerm_postgresql_flexible_server" "server-database" {
   resource_group_name = azurerm_resource_group.ephemeral.name
   location            = azurerm_resource_group.ephemeral.location
   zone                = "3"
-  version                = "13"
+  version             = "13"
 
   administrator_login    = var.db_admin_login
   administrator_password = var.db_admin_password
 
   backup_retention_days = 7
 
-  storage_mb             = 32768
-  sku_name               = "B_Standard_B1ms"
+  storage_mb  = 32768
+  sku_name    = "B_Standard_B1ms"
 
   public_network_access_enabled = false
-  delegated_subnet_id           = azurerm_subnet.subnet-database.id
-  private_dns_zone_id           = azurerm_private_dns_zone.postgres.id
-
-  depends_on = [azurerm_private_dns_zone_virtual_network_link.postgres]
+  delegated_subnet_id           = var.db_subnet_id
+  private_dns_zone_id           = var.private_dns_zone_postgres_id
 }
 
 resource "azurerm_postgresql_flexible_server_database" "database-jamly" {
@@ -298,10 +277,12 @@ resource "azurerm_postgresql_flexible_server_database" "database-jamly" {
 
 resource "local_file" "ansible_inventory" {
   content = templatefile("${path.module}/../templates/inventory.tpl", {
-    cp_public_ip  = azurerm_public_ip.control_plane.ip_address
-    cp_private_ip = azurerm_network_interface.control_plane.private_ip_address
-    w1_private_ip = azurerm_network_interface.worker.private_ip_address
-    admin_user    = var.admin_username
+    cp_public_ip           = azurerm_public_ip.control_plane.ip_address
+    cp_private_ip          = azurerm_network_interface.control_plane.private_ip_address
+    w1_private_ip          = azurerm_network_interface.worker.private_ip_address
+    admin_user             = var.admin_username
+    eso_identity_client_id = var.eso_identity_client_id
+    eso_keyvault_url       = var.eso_keyvault_url
   })
   filename        = "${path.module}/../../../ansible/inventory/hosts.ini"
   file_permission = "0600"

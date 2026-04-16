@@ -1,0 +1,4 @@
+---
+eso_namespace: external-secrets
+eso_chart_version: ""   # empty = latest
+eso_install_crds: true

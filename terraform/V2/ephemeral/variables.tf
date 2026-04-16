@@ -26,7 +26,7 @@ variable "project_name" {
 variable "location" {
   description = "Azure region for resources"
   type        = string
-  default     = "francecentral"
+  default     = "swedencentral"
 }
 
 variable "tags" {
@@ -52,13 +52,13 @@ variable "ssh_public_key" {
 variable "vm_size_control_plane" {
   description = "Azure VM size for the Kubernetes control plane"
   type        = string
-  default     = "Standard_F4s_v2"
+  default     = "Standard_B4s_v2"
 }
 
 variable "vm_size_worker" {
-  description = "Azure VM size for the Kubernetes worker node (~€30/month for Standard_B2s)"
+  description = "Azure VM size for the Kubernetes worker node (~€27/month for Standard_B2ls_v2)"
   type        = string
-  default     = "Standard_B2s"
+  default     = "Standard_B2ls_v2"
 }
 
 variable "db_admin_login" {
@@ -75,4 +75,29 @@ variable "db_name" {
   description = "Database name"
   type        = string
   sensitive   = false
+}
+
+variable "eso_identity_id" {
+  description = "Resource ID of the ESO managed identity (from persistent outputs)"
+  type        = string
+}
+
+variable "eso_identity_client_id" {
+  description = "Client ID of the ESO managed identity (from persistent outputs)"
+  type        = string
+}
+
+variable "eso_keyvault_url" {
+  description = "Vault URI of the Key Vault (from persistent outputs)"
+  type        = string
+}
+
+variable "db_subnet_id" {
+  description = "ID of the delegated DB subnet (from persistent outputs)"
+  type        = string
+}
+
+variable "private_dns_zone_postgres_id" {
+  description = "ID of the PostgreSQL private DNS zone (from persistent outputs)"
+  type        = string
 }
