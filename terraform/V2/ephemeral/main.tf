@@ -165,9 +165,12 @@ resource "azurerm_linux_virtual_machine" "control_plane" {
 
   network_interface_ids = [azurerm_network_interface.control_plane.id]
 
-  admin_ssh_key {
-    username   = var.admin_username
-    public_key = var.ssh_public_key
+  dynamic "admin_ssh_key" {
+    for_each = var.ssh_public_key
+    content {
+      username   = var.admin_username
+      public_key = admin_ssh_key.value
+    }
   }
 
   os_disk {
@@ -218,9 +221,12 @@ resource "azurerm_linux_virtual_machine" "worker" {
 
   network_interface_ids = [azurerm_network_interface.worker.id]
 
-  admin_ssh_key {
-    username   = var.admin_username
-    public_key = var.ssh_public_key
+  dynamic "admin_ssh_key" {
+    for_each = var.ssh_public_key
+    content {
+      username   = var.admin_username
+      public_key = admin_ssh_key.value
+    }
   }
 
   os_disk {
