@@ -1,0 +1,9 @@
+---
+- name: Install ArgoCD
+  hosts: k8s_control_plane
+  become: true
+  gather_facts: false
+  tags: argocd-install
+
+  roles:
+    - role: argocd

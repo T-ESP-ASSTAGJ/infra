@@ -1,0 +1,9 @@
+---
+- name: Bootstrap ArgoCD
+  hosts: k8s_control_plane
+  become: true
+  gather_facts: false
+  tags: argocd-bootstrap
+
+  roles:
+    - role: argocd

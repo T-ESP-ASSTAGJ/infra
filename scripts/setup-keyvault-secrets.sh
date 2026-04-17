@@ -45,6 +45,7 @@ set_secret "app-secret"          "Symfony APP_SECRET"
 set_secret "mercure-jwt-secret"  "Mercure JWT secret"
 set_secret "database-url"        "Database URL (e.g. postgresql://user:pass@host:5432/db)"
 set_secret "mercure-public-url"  "Mercure public URL (e.g. https://example.com/.well-known/mercure)"
+set_secret "github-token"         "GitHub Personal Access Token (read:repo)"
 
 echo ""
 echo "Done. Verify with:"

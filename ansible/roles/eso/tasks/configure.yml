@@ -15,7 +15,7 @@
     kubectl api-resources --api-group=external-secrets.io
     --kubeconfig /etc/kubernetes/admin.conf
   register: eso_api_ready
-  until: '"SecretStore" in eso_api_ready.stdout'
+  until: '"ClusterSecretStore" in eso_api_ready.stdout and "SecretStore" in eso_api_ready.stdout'
   retries: 24
   delay: 5
   changed_when: false
@@ -28,6 +28,18 @@
     KUBECONFIG: /etc/kubernetes/admin.conf
   changed_when: false
 
+- name: Copy ClusterSecretStore manifest
+  ansible.builtin.template:
+    src: clustersecretstore.yaml.j2
+    dest: /tmp/clustersecretstore.yaml
+    mode: '0644'
+
+- name: Apply ClusterSecretStore
+  ansible.builtin.command: kubectl apply -f /tmp/clustersecretstore.yaml
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  changed_when: false
+
 - name: Copy ExternalSecret manifest
   ansible.builtin.copy:
     src: externalsecret.yaml
@@ -36,6 +48,18 @@
 
 - name: Apply ExternalSecret
   ansible.builtin.command: kubectl apply -f /tmp/externalsecret.yaml
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  changed_when: false
+
+- name: Copy ArgoCD ExternalSecret manifest
+  ansible.builtin.copy:
+    src: externalsecret-argocd.yaml
+    dest: /tmp/externalsecret-argocd.yaml
+    mode: '0644'
+
+- name: Apply ArgoCD ExternalSecret
+  ansible.builtin.command: kubectl apply -f /tmp/externalsecret-argocd.yaml
   environment:
     KUBECONFIG: /etc/kubernetes/admin.conf
   changed_when: false
