@@ -1,0 +1,24 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: jamly-api
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/T-ESP-ASSTAGJ/infra.git
+    targetRevision: staging
+    path: k8s/manifests/jamly-api
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: jamly-api
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

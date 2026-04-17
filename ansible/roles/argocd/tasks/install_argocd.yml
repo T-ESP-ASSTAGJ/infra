@@ -1,0 +1,52 @@
+---
+
+- name: Check if ArgoCD is already installed
+  ansible.builtin.command: >
+    kubectl get namespace argocd
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  register: argocd_namespace
+  changed_when: false
+  failed_when: false
+
+- name: Install ArgoCD
+  when: argocd_namespace.rc != 0
+  block:
+    - name: Add ArgoCD Helm repository
+      ansible.builtin.command: >
+        helm repo add argo https://argoproj.github.io/argo-helm
+      environment:
+        KUBECONFIG: /etc/kubernetes/admin.conf
+      changed_when: false
+
+    - name: Update Helm repositories
+      ansible.builtin.command: helm repo update
+      changed_when: false
+
+    - name: Create argocd namespace
+      ansible.builtin.command: >
+        kubectl create namespace argocd
+      environment:
+        KUBECONFIG: /etc/kubernetes/admin.conf
+      changed_when: true
+
+    - name: Install ArgoCD via Helm
+      ansible.builtin.command: >
+        helm install argocd argo/argo-cd
+        --namespace argocd
+        --version {{ argocd_version | default('7.7.0') }}
+        --set server.service.type=ClusterIP
+        --wait
+        --timeout 300s
+      environment:
+        KUBECONFIG: /etc/kubernetes/admin.conf
+      changed_when: true
+
+- name: Wait for ArgoCD server to be ready
+  ansible.builtin.command: >
+    kubectl rollout status deployment/argocd-server
+    -n argocd
+    --timeout=300s
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  changed_when: false

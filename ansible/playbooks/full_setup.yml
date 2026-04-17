@@ -11,5 +11,11 @@
 - name: Setup Kubernetes workers
   import_playbook: k8s_worker.yml
 
+- name: Install ArgoCD
+  import_playbook: argocd-install.yml
+
 - name: Install External Secrets Operator
   import_playbook: eso.yml
+
+- name: Bootstrap ArgoCD
+  import_playbook: argocd-bootstrap.yml
