@@ -41,6 +41,17 @@
       delay: 10
       until: apiserver_health.status == 200
 
+    - name: Wait for API server to be fully ready for kubectl
+      ansible.builtin.command: >
+        kubectl get --raw=/readyz
+      environment:
+        KUBECONFIG: /etc/kubernetes/admin.conf
+      register: api_ready
+      until: api_ready.rc == 0
+      retries: 30
+      delay: 10
+      changed_when: false
+
     - name: Patch CoreDNS to forward to Azure upstream DNS
       ansible.builtin.shell: |
         kubectl get configmap coredns -n kube-system -o yaml | \
@@ -76,6 +87,32 @@
         dest: /root/k8s-control-plane-join-command.sh
         mode: '0700'
       when: control_plane_join_command.stdout != ""
+
+- name: Ensure CoreDNS forwards to Azure upstream DNS
+  block:
+    - name: Get current CoreDNS config
+      ansible.builtin.command: >
+        kubectl get configmap coredns -n kube-system -o jsonpath='{.data.Corefile}'
+      environment:
+        KUBECONFIG: /etc/kubernetes/admin.conf
+      register: coredns_config
+      changed_when: false
+
+    - name: Patch CoreDNS to forward to Azure upstream DNS
+      ansible.builtin.shell: |
+        kubectl get configmap coredns -n kube-system -o yaml | \
+        sed 's|forward . /etc/resolv.conf|forward . {{ k8s_upstream_dns }}|' | \
+        kubectl apply -f -
+      environment:
+        KUBECONFIG: /etc/kubernetes/admin.conf
+      when: "'forward . /etc/resolv.conf' in coredns_config.stdout"
+
+    - name: Restart CoreDNS to pick up new config
+      ansible.builtin.command: >
+        kubectl rollout restart deployment/coredns -n kube-system
+      environment:
+        KUBECONFIG: /etc/kubernetes/admin.conf
+      when: "'forward . /etc/resolv.conf' in coredns_config.stdout"
 
 - name: Generate worker join command
   ansible.builtin.command:

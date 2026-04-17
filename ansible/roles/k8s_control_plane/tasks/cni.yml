@@ -180,6 +180,18 @@
     KUBECONFIG: /etc/kubernetes/admin.conf
   changed_when: false
 
+- name: Copy Web HTTPRoute manifest to control plane
+  ansible.builtin.copy:
+    src: httproute-web.yaml
+    dest: /tmp/httproute-web.yaml
+    mode: '0644'
+
+- name: Apply Web HTTPRoute
+  ansible.builtin.command: kubectl apply -f /tmp/httproute-web.yaml
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  changed_when: false
+
 - name: Verify CNI is working
   ansible.builtin.command: kubectl get nodes -o wide
   environment:

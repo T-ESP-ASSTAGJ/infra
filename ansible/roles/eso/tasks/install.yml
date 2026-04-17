@@ -14,6 +14,9 @@
     --create-namespace
     --set installCRDs={{ eso_install_crds | lower }}
     --set webhook.failurePolicy=Ignore
+    --set nodeSelector."node-role\.kubernetes\.io/worker"=""
+    --set webhook.nodeSelector."node-role\.kubernetes\.io/worker"=""
+    --set certController.nodeSelector."node-role\.kubernetes\.io/worker"=""
     --timeout 10m0s
     --wait
   environment:
