@@ -1,0 +1,28 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: "{{ gateway.name }}-gateway"
+  namespace: "{{ gateway.namespace }}"
+  annotations:
+    konghq.com/publish-service: {{ gateway.namespace }}/{{ gateway.namespace }}-gateway-kong-proxy
+spec:
+  gatewayClassName: "kong-{{ gateway.namespace }}"
+  listeners:
+{% for listener in gateway.listeners %}
+  - name: "{{ listener.name }}"
+    port: {{ listener.port }}
+    protocol: {{ listener.protocol }}
+{% if listener.hostname is defined and listener.protocol in ['HTTPS', 'TLS'] %}
+    hostname: "{{ listener.hostname }}"
+{% endif %}
+{% if listener.protocol in ['HTTPS', 'TLS'] %}
+    tls:
+      mode: {{ listener.mode | default('Terminate') }}
+      certificateRefs:
+        - kind: Secret
+          name: {{ listener.tls_secret_name }}
+{% endif %}
+    allowedRoutes:
+      namespaces:
+        from: All
+{% endfor %}

@@ -1,0 +1,48 @@
+{% for backend in route.backends %}
+{% if backend.namespace != gateway.namespace %}
+---
+apiVersion: gateway.networking.k8s.io/v1beta1
+kind: ReferenceGrant
+metadata:
+  name: allow-{{ gateway.namespace }}-to-{{ backend.namespace }}-{{ backend.name }}
+  namespace: {{ backend.namespace }}
+spec:
+  from:
+  - group: gateway.networking.k8s.io
+    kind: {{ route.type }}
+    namespace: {{ gateway.namespace }}
+  to:
+  - group: ""
+    kind: Service
+    name: {{ backend.name }}
+
+---
+
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: kong-service-reader
+  namespace: {{ backend.namespace }}
+rules:
+- apiGroups: [""] 
+  resources: ["services"]
+  verbs: ["get", "list", "watch"]
+  
+---
+
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: kong-read-{{ backend.namespace }}-services
+  namespace: {{ backend.namespace }}
+subjects:
+- kind: ServiceAccount
+  name: {{ gateway.namespace }}-controller-kong 
+  namespace: {{ gateway.namespace }}
+roleRef:
+  kind: Role
+  name: kong-service-reader 
+  apiGroup: rbac.authorization.k8s.io
+  
+{% endif %}
+{% endfor %}
