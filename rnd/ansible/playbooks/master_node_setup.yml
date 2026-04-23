@@ -1,0 +1,38 @@
+- hosts: all
+  become: yes
+  
+  vars:
+    timezone: "Europe/Paris"
+    ntp_servers:
+      - "2.fr.pool.ntp.org"
+      - "2.europe.pool.ntp.org"
+      - "pool.ntp.org"
+  
+  environment:
+    KUBECONFIG: /etc/rancher/rke2/rke2.yaml
+
+  tasks:
+    - name: Sync system clock
+      include_tasks: ../tasks/sync_system_clock.yml
+
+    - name: Install linux utils
+      include_tasks: ../tasks/install_linux_utils.yml
+
+    - name: Install Kubernetes RKE2
+      include_tasks: ../tasks/setup_rke2_master.yml
+
+    - name: Install helm
+      include_tasks: ../tasks/install_helm.yml
+
+    - name: Setup fzf
+      include_tasks: ../tasks/configure_fzf.yml
+      
+    - name: Install prom operator
+      include_tasks: ../tasks/monitoring/configure_prometheus_operator.yml
+
+    - name: Setup Longhorn
+      include_tasks: ../tasks/setup_longhorn.yml
+
+    - name: Setup Cilium BGP
+      include_tasks: ../tasks/setup_cilium_bgp.yml
+

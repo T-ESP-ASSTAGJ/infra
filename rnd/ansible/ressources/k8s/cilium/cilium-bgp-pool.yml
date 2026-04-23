@@ -1,0 +1,12 @@
+apiVersion: cilium.io/v2
+kind: CiliumLoadBalancerIPPool
+metadata:
+  name: "lan-1-pool"
+spec:
+  serviceSelector:
+    matchLabels:
+      external-ip-pool: "lan-1"
+  blocks:
+    # This /27 block provides 32 addresses, from 192.168.10.32 to 192.168.10.63.
+    # It fully includes your desired range of .40 to .60.
+    - cidr: "192.168.200.0/24"

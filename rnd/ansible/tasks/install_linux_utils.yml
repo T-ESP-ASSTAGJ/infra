@@ -1,0 +1,18 @@
+- name: Install a list of packages
+  ansible.builtin.package:
+    name:
+      - curl
+      - nano
+      - python3-kubernetes
+      - python3-hvac
+      - jq
+      - awscli
+    state: present
+    update_cache: yes
+
+#- name: Install required Python Kubernetes library
+#  become: yes
+#  ansible.builtin.pip:
+#    name: kubernetes
+#    executable: pip3
+#    state: present

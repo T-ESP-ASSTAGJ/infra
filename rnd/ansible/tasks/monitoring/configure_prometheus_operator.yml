@@ -1,0 +1,40 @@
+- name: Add prometheus operator helm repo
+  kubernetes.core.helm_repository:
+    name: prometheus-community
+    repo_url: https://prometheus-community.github.io/helm-charts
+  retries: 10
+  delay: 10
+
+- name: Create namespace for monitoring
+  kubernetes.core.k8s:
+    api_version: v1
+    kind: Namespace
+    name: monitoring
+
+
+- name: Copy Prometheus Operator configuration files
+  ansible.builtin.copy:
+    src: "../ressources/k8s/prometheus-operator/"
+    dest: "/root/.kube/ressources/prometheus-operator/"
+    mode: '0644'
+    backup: yes
+
+- name: Check if Prometheus Operator release exists
+  kubernetes.core.helm_info:
+    name: prom-operator
+    namespace: monitoring
+  register: prom_release_info
+  ignore_errors: true
+
+- name: Install Prometheus Operator
+  kubernetes.core.helm:
+    name: prom-operator
+    chart_ref: prometheus-community/kube-prometheus-stack
+    namespace: monitoring
+    create_namespace: true
+    values_files:
+      - /root/.kube/ressources/prometheus-operator/helm/prom-default-values.yml
+  when: prom_release_info.status is undefined or prom_release_info.status.status != "deployed"
+  retries: 10
+  delay: 10
+

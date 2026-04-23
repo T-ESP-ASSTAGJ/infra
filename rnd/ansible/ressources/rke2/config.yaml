@@ -1,0 +1,9 @@
+cni: cilium
+disable-kube-proxy: "true"
+# BEGIN ANSIBLE MANAGED BLOCK
+tls-san:
+  - "10.13.56.124"
+# END ANSIBLE MANAGED BLOCK
+
+disable:
+  - rke2-ingress-nginx
