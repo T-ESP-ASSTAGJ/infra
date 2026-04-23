@@ -4,6 +4,25 @@ This subtree captures infrastructure research and lab automation that has not be
 
 The content is intentionally isolated under `rnd/` so it can be reviewed, iterated on, and promoted into the main stack later in smaller changes.
 
+## What This Contains
+
+The imported research models a self-hosted platform lab with:
+
+- an OpenBSD gateway node that owns routing, DHCP, DNS, and packet filtering
+- a dedicated PKI node running Vault as a certificate authority
+- a separate Vault node for secrets and dynamic database credentials
+- an RKE2 control-plane node plus worker-style application nodes
+- Kubernetes manifests and templates for cert-manager, CNPG, Longhorn, Prometheus, Grafana, OpenObserve, Bytebase, and gateway-related resources
+
+The most useful starting points are:
+
+- [docs/architecture.md](./docs/architecture.md)
+- [docs/bootstrap.md](./docs/bootstrap.md)
+- [docs/playbooks.md](./docs/playbooks.md)
+- [docs/variables.md](./docs/variables.md)
+- [ansible/README.md](./ansible/README.md)
+- [vagrant/README.md](./vagrant/README.md)
+
 ## Included Areas
 
 - `ansible/`: node bootstrap playbooks, shared tasks, Kubernetes manifests, and supporting templates
