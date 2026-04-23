@@ -1,0 +1,16 @@
+apiVersion: gateway.networking.k8s.io/v1alpha3
+kind: BackendTLSPolicy
+metadata:
+  name: platform-database-pooler-tls-policy
+  namespace: database
+spec:
+  targetRefs:
+  - group: ""
+    kind: Service
+    name: pooler-platform-rw
+  validation:
+    hostname: platform-database-cluster-pooler.database.svc.cluster.local
+    caCertificateRefs:
+    - group: ""
+      kind: Secret 
+      name: dashboard-cert-secret # The name of the Secret holding the CA cert
