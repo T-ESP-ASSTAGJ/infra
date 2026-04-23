@@ -49,6 +49,14 @@ k8s_control_plane_firewall_rules:
     proto: "tcp"
     rule: "allow"
     comment: "kube-controller-manager"
+  - port: "8472"
+    proto: "udp"
+    rule: "allow"
+    comment: "Cilium VXLAN tunnel"
+  - port: "4240"
+    proto: "tcp"
+    rule: "allow"
+    comment: "Cilium health checks"
 
 k8s_certificate_key_retention: "2h"
 
