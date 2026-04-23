@@ -1,0 +1,18 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: openbsd-monitor
+  namespace: monitoring
+  labels:
+    release: prom-operator  
+spec:
+  selector:
+    matchLabels:
+      app: openbsd
+  namespaceSelector:
+    matchNames:
+      - openbsd
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 15s

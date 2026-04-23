@@ -1,0 +1,19 @@
+apiVersion: discovery.k8s.io/v1
+kind: EndpointSlice
+metadata:
+  name: openbsd-metrics-1 # by convention, use the name of the Service
+                     # as a prefix for the name of the EndpointSlice
+  namespace: openbsd
+  labels:
+    # You should set the "kubernetes.io/service-name" label.
+    # Set its value to match the name of the Service
+    kubernetes.io/service-name: openbsd-metrics
+addressType: IPv4
+ports:
+  - name: http # should match with the name of the service port defined above
+    appProtocol: http
+    protocol: TCP
+    port: 9107
+endpoints:
+  - addresses:
+      - "192.168.10.1"

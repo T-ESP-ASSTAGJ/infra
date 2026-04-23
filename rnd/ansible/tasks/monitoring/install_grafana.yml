@@ -1,0 +1,38 @@
+---
+# Enhanced grafana installation task updated for PostgreSQL
+- name: Add grafana Helm repository
+  kubernetes.core.helm_repository:
+    name: grafana
+    repo_url: https://grafana.github.io/helm-charts
+
+- name: Update Helm repositories
+  shell: helm repo update
+  changed_when: false
+
+- name: Copy grafana value files
+  ansible.builtin.copy:
+    src: "../ressources/k8s/grafana/"
+    dest: "/root/.kube/ressources/grafana/"
+    mode: '0644'
+    backup: yes
+
+- name: Check if grafana is already installed
+  shell: helm list -n monitoring --output json
+  register: grafana_installed
+  changed_when: false
+  failed_when: false
+
+- name: Install grafana using Helm
+  kubernetes.core.helm:
+    name: my-grafana
+    chart_ref: grafana/grafana
+    namespace: monitoring
+    create_namespace: true
+    values_files:
+      - /root/.kube/ressources/grafana/helm/grafana-default-values.yml
+    timeout: 600s
+  when: "'grafana' not in grafana_installed.stdout"
+  register: grafana_helm_install
+
+- name: Get the admin password 
+  shell: echo "kubectl get secret --namespace monitoring my-grafana -o jsonpath="{.data.admin-password}" | base64 --decode ; echo"

@@ -1,0 +1,19 @@
+- name: Copy openObserve value files
+  ansible.builtin.copy:
+    src: "../ressources/k8s/openObserve/"
+    dest: "/root/.kube/ressources/openObserve/"
+    mode: '0644'
+    backup: yes
+
+- name: Create monitoring namespace
+  kubernetes.core.k8s:
+    name: monitoring
+    api_version: v1
+    kind: Namespace
+    state: present
+
+- name: Apply the kubernetes openObserve manifest
+  kubernetes.core.k8s:
+    state: present
+    src: /root/.kube/ressources/openObserve/openObserve.yml
+  delegate_to: masternode
