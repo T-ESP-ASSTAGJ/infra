@@ -1,0 +1,55 @@
+- name: Check if the intermediate CA secrets engine exists
+  ansible.builtin.shell:
+    cmd: "vault secrets list -tls-skip-verify | grep -q platform_kube_intermediate_ca/"
+  register: intermediate_kube_ca_check
+  changed_when: false
+  failed_when: false
+  
+- name: Enable the intermediate CA pki
+  ansible.builtin.command: vault secrets enable -tls-skip-verify -path=platform_kube_intermediate_ca pki
+  when: intermediate_kube_ca_check.rc != 0
+  
+- name: Tune CA max lease
+  ansible.builtin.command: vault secrets tune -tls-skip-verify -max-lease-ttl=87600h platform_internal_root_ca
+  when: intermediate_kube_ca_check.rc != 0
+  
+- name: Generate intermediate CSR and capture output
+  ansible.builtin.command:
+    cmd: >
+      vault write -tls-skip-verify -format=json
+      platform_kube_intermediate_ca/intermediate/generate/internal
+      common_name="Platform kubernetes intermediate CA"
+      issuer_name="platform-int-kubernetes"
+  register: intermediate_csr_json
+  when: intermediate_kube_ca_check.rc != 0
+  changed_when: true
+
+- name: Save the intermediate CSR to a file
+  ansible.builtin.copy:
+    content: "{{ (intermediate_csr_json.stdout | from_json).data.csr }}"
+    dest: pki_kube_intermediate.csr
+  when: intermediate_csr_json.changed
+  
+- name: Sign intermediate CSR and capture output
+  ansible.builtin.command:
+    cmd: >
+      vault write -tls-skip-verify -format=json
+      platform_internal_root_ca/root/sign-intermediate
+      issuer_ref="{{ issuer_id }}"
+      csr=@pki_kube_intermediate.csr
+      format=pem_bundle
+      ttl="43800h"
+  register: signed_kube_cert_json
+  when: intermediate_csr_json.changed
+  changed_when: true
+
+- name: Save the signed certificate to a file
+  ansible.builtin.copy:
+    content: "{{ (signed_kube_cert_json.stdout | from_json).data.certificate }}"
+    dest: intermediate_kube.cert.pem
+  when: signed_kube_cert_json.changed
+  
+- name: Import the certificate back into vault
+  ansible.builtin.command: vault write -tls-skip-verify platform_kube_intermediate_ca/intermediate/set-signed certificate=@intermediate_kube.cert.pem
+  when: intermediate_kube_ca_check.rc != 0
+  

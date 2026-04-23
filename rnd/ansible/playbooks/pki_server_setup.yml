@@ -1,0 +1,78 @@
+- hosts: all
+  become: yes
+  
+  vars:
+    timezone: "Europe/Paris"
+    ntp_servers:
+      - "2.fr.pool.ntp.org"
+      - "2.europe.pool.ntp.org"
+      - "pool.ntp.org"
+  
+    server_csr_conf_src_path: "../ressources/pki/csr.conf"
+
+    cert_work_dir: "/tmp/vault_certs_work"
+    vault_tls_dir: "/opt/vault/tls"
+
+    ca_key_path: "{{ cert_work_dir }}/vault-ca.key"
+    ca_cert_path: "{{ cert_work_dir }}/vault-ca.crt"
+
+    server_key_path: "{{ cert_work_dir }}/vault-server.key"
+    ca_csr_path: "{{ cert_work_dir }}/vault-ca.csr"
+    server_csr_path: "{{ cert_work_dir }}/vault-server.csr"
+    server_cert_path: "{{ cert_work_dir }}/vault-server.crt"
+    server_conf_path: "{{ cert_work_dir }}/csr.conf"
+    
+    ca_subj:
+      countryName: FR
+      stateOrProvinceName: IDF
+      localityName: Paris
+      organizationName: Platform
+      commonName: "Platform PKI CA"
+    server_subj:
+      countryName: FR
+      stateOrProvinceName: IDF
+      localityName: Paris
+      organizationName: Platform
+      commonName: "platform.local"
+    server_sans:
+      - "DNS:pki.platform.local"
+      - "DNS:external-pki.cert-manager.svc.cluster.local"
+      - "IP:192.168.10.16"
+      - "IP:10.68.81.89"
+  environment:
+    VAULT_ADDR: https://127.0.0.1:8200
+
+  tasks:
+    - name: Sync system clock
+      include_tasks: ../tasks/sync_system_clock.yml
+      
+    - name: Install linux utils
+      include_tasks: ../tasks/install_linux_utils.yml
+      
+    - name: Install & configure vault
+      include_tasks: ../tasks/vault/install_vault.yml
+      
+    - name: Generate pki server own certificates
+      include_tasks: ../tasks/vault/setup_pki_certificates.yml
+    
+    - name: Initiate the vault
+      include_tasks: ../tasks/vault/initiate_vault.yml
+      
+    - name: Unseal vault
+      include_tasks: ../tasks/vault/unseal_vault.yml
+      
+    - name: Setup root CA
+      include_tasks: ../tasks/vault/setup_root_ca.yml    
+        
+    - name: Setup internal intermediate CA
+      include_tasks: ../tasks/vault/setup_intermediate_ca.yml    
+        
+    - name: Setup kube internal intermediate CA
+      include_tasks: ../tasks/vault/setup_kubernetes_intermediate_ca.yml
+  
+  handlers:
+    - name: "Start vault" 
+      ansible.builtin.service:
+        name: vault
+        state: started
+        enabled: yes
