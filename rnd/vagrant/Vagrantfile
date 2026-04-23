@@ -1,0 +1,305 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+Vagrant.configure("2") do |config|
+  bridge_iface = ENV.fetch("LAB_BRIDGE_IFACE", "en0")
+
+  config.vm.define "gateway" do |gateway|
+
+    gateway.vm.box = "tvlooy/openbsd-7.6-amd64"
+    gateway.vm.box_version = "20251010"
+
+    gateway.ssh.shell = "/bin/ksh"
+
+    gateway.vm.synced_folder ".", "/vagrant", disabled: true
+
+    #open ports for ssh redirection through bastion host
+
+    #for frontend_node
+    gateway.vm.network "forwarded_port", guest: 3500, host: 3500
+
+    #for database_node
+    gateway.vm.network "forwarded_port", guest: 3501, host: 3501
+
+    #for backend_node
+    gateway.vm.network "forwarded_port", guest: 3502, host: 3502
+
+    #for master_node
+    gateway.vm.network "forwarded_port", guest: 3503, host: 3503
+
+    #for api_node
+    gateway.vm.network "forwarded_port", guest: 3504, host: 3504    
+    
+    #for vault_server
+    gateway.vm.network "forwarded_port", guest: 3505, host: 3505    
+    
+    #for pki_server
+    gateway.vm.network "forwarded_port", guest: 3506, host: 3506
+    
+    #for monitoring
+    gateway.vm.network "forwarded_port", guest: 3507, host: 3507
+    
+    #for monitoring
+    gateway.vm.network "forwarded_port", guest: 3508, host: 3508
+
+    gateway.vm.hostname = "gatewayserver"
+
+    gateway.vm.network "private_network", ip: "192.168.10.1",
+      virtualbox__intnet: "appnetwork"
+
+    gateway.vm.network "public_network", bridge: bridge_iface, auto_config: false
+
+    gateway.vm.provider "virtualbox" do |vb|
+      vb.customize ["modifyvm", :id, "--nicpromisc4", "allow-all"]
+      vb.gui = false
+      vb.name = "gateway"
+      vb.memory = 1024
+      vb.cpus = 1
+
+
+    end
+
+    # To setup python
+    gateway.vm.provision "shell", inline: <<-SHELL
+      sh -c 'echo https://ftp.fr.openbsd.org/pub/OpenBSD > /etc/installurl'
+      pkg_add -r python
+    SHELL
+
+    gateway.vm.provision "ansible" do |ansible|
+      
+      ansible.inventory_path = "../ansible/inventory.ini"
+
+      ansible.playbook = "../ansible/playbooks/gateway_server_setup.yml"  
+
+    end
+
+  end
+
+  config.vm.define "pki" do |pki|
+  
+      pki.vm.box = "alvistack/ubuntu-25.04"   
+  
+      pki.vm.synced_folder ".", "/vagrant", disabled: true
+    
+      pki.vm.hostname = "pkiserver"
+  
+      pki.vm.network "private_network", mac: "080027123470", type: "dhcp", adapter: "1", auto_config: false, virtualbox__intnet: "appnetwork"
+  
+      pki.ssh.host = "localhost"
+  
+      pki.ssh.port = 3506
+  
+      pki.vm.provider "virtualbox" do |vb|
+        vb.gui = false
+        vb.name = "pki"
+        vb.memory = 1024
+        vb.cpus = 1
+  
+  
+      end
+  
+      pki.vm.provision "ansible" do |ansible|
+
+        ansible.inventory_path = "../ansible/inventory.ini"
+
+        ansible.playbook = "../ansible/playbooks/pki_server_setup.yml"  
+
+      end
+  
+  end
+  
+  config.vm.define "vault" do |vault|
+  
+      vault.vm.box = "alvistack/ubuntu-25.04"   
+  
+      vault.vm.synced_folder ".", "/vagrant", disabled: true
+    
+      vault.vm.hostname = "vaultserver"
+  
+      vault.vm.network "private_network", mac: "080027123469", type: "dhcp", adapter: "1", auto_config: false, virtualbox__intnet: "appnetwork"
+  
+      vault.ssh.host = "localhost"
+  
+      vault.ssh.port = 3505
+  
+      vault.vm.provider "virtualbox" do |vb|
+        vb.gui = false
+        vb.name = "vault"
+        vb.memory = 1024
+        vb.cpus = 1
+  
+  
+      end
+  
+      vault.vm.provision "ansible" do |ansible|
+
+        ansible.inventory_path = "../ansible/inventory.ini"
+
+        ansible.playbook = "../ansible/playbooks/vault_server_setup.yml"  
+
+      end
+  
+  end
+
+  config.vm.define "master_node" do |master_node|
+      
+    config.vm.box = "alvistack/ubuntu-25.04"
+
+    master_node.vm.synced_folder ".", "/vagrant", disabled: true
+
+    master_node.vm.hostname = "masternode"
+
+    master_node.vm.network "private_network", mac: "080027123463", type: "dhcp", adapter: "1", auto_config: false, virtualbox__intnet: "appnetwork"
+
+    master_node.ssh.host = "localhost"
+
+    master_node.ssh.port = 3503
+    
+    master_node.ssh.disable_deprecated_algorithms = false
+
+    master_node.vm.provider "virtualbox" do |vb|
+
+      vb.gui = false
+      vb.name = "master_node"
+      vb.memory = 6000
+      vb.cpus = 4
+    end
+
+    master_node.vm.provision "ansible" do |ansible|
+      
+      ansible.inventory_path = "../ansible/inventory.ini"
+      ansible.playbook = "../ansible/playbooks/master_node_setup.yml"
+ 
+    end
+
+  end
+
+  config.vm.define "backend_node" do |backend_node|
+      
+    config.vm.box = "alvistack/ubuntu-25.04"
+
+    backend_node.vm.synced_folder ".", "/vagrant", disabled: true
+
+    backend_node.vm.hostname = "backendnode"
+
+    backend_node.vm.network "private_network", mac: "080027123462", type: "dhcp", adapter: "1", auto_config: false, virtualbox__intnet: "appnetwork"
+
+    backend_node.ssh.host = "localhost"
+
+    backend_node.ssh.port = 3502
+
+    backend_node.vm.provider "virtualbox" do |vb|
+
+      vb.gui = false
+      vb.name = "backend_node"
+      vb.memory = 3000
+      vb.cpus = 4
+    end
+
+    backend_node.vm.provision "ansible" do |ansible|
+      
+      ansible.inventory_path = "../ansible/inventory.ini"
+      ansible.playbook = "../ansible/playbooks/backend_node_setup.yml"
+ 
+    end
+
+  end  
+
+  config.vm.define "database_node" do |database_node|
+    
+    config.vm.box = "alvistack/ubuntu-25.04"
+    
+    database_node.vm.synced_folder ".", "/vagrant", disabled: true
+
+    database_node.vm.hostname = "databasenode"
+
+    database_node.vm.network "private_network", mac: "080027123461", type: "dhcp", adapter: "1", auto_config: false, virtualbox__intnet: "appnetwork"
+
+    database_node.ssh.host = "localhost"
+
+    database_node.ssh.port = 3501
+
+    database_node.vm.provider "virtualbox" do |vb|
+
+      vb.gui = false
+      vb.name = "database_node"
+      vb.memory = 3000
+      vb.cpus = 4
+    end
+
+    database_node.vm.provision "ansible" do |ansible|
+      
+      ansible.inventory_path = "../ansible/inventory.ini"
+      ansible.playbook = "../ansible/playbooks/database_node_setup.yml"
+      if ENV["ANSIBLE_VAULT_PASSWORD_FILE"]
+        ansible.vault_password_file = ENV["ANSIBLE_VAULT_PASSWORD_FILE"]
+      end
+ 
+    end
+
+  end
+
+#   config.vm.define "frontend_node" do |frontend_node|
+#       
+#     config.vm.box = "alvistack/ubuntu-25.04"
+# 
+#     frontend_node.vm.synced_folder ".", "/vagrant", disabled: true
+# 
+#     frontend_node.vm.hostname = "frontendnode"
+# 
+#     frontend_node.vm.network "private_network", mac: "080027123460", type: "dhcp", adapter: "1", auto_config: false, virtualbox__intnet: "appnetwork"
+# 
+#     frontend_node.ssh.host = "localhost"
+# 
+#     frontend_node.ssh.port = 3500
+# 
+#     frontend_node.vm.provider "virtualbox" do |vb|
+# 
+#       vb.gui = false
+#       vb.name = "frontend_node"
+#       vb.memory = 4096
+#       vb.cpus = 4
+#     end
+# 
+#     frontend_node.vm.provision "ansible" do |ansible|
+#       
+#       ansible.inventory_path = "../ansible/inventory.ini"
+#       ansible.playbook = "../ansible/playbooks/frontend_node_setup.yml"
+#  
+#     end
+# 
+#   end
+# 
+# 
+#   config.vm.define "api_node" do |api_node|
+#       
+#     config.vm.box = "alvistack/ubuntu-25.04"
+# 
+#     api_node.vm.synced_folder ".", "/vagrant", disabled: true
+# 
+#     api_node.vm.hostname = "apinode"
+# 
+#     api_node.vm.network "private_network", mac: "080027123464", type: "dhcp", adapter: "1", auto_config: false, virtualbox__intnet: "appnetwork"
+# 
+#     api_node.ssh.host = "localhost"
+# 
+#     api_node.ssh.port = 3504
+# 
+#     api_node.vm.provider "virtualbox" do |vb|
+# 
+#       vb.gui = false
+#       vb.name = "api_node"
+#       vb.memory = 4096
+#       vb.cpus = 4
+#     end
+# 
+#     api_node.vm.provision "ansible" do |ansible|
+#       
+#       ansible.inventory_path = "../ansible/inventory.ini"
+#       ansible.playbook = "../ansible/playbooks/api_node_setup.yml"
+#  
+#     end
+# 
+#   end  
+  
+end
