@@ -1,0 +1,51 @@
+- name: Check if pf_exporter is already installed
+  stat:
+    path: /usr/local/bin/pf_exporter
+  register: pf_exporter_binary
+
+- name: Install dependencies (Go and Git)
+  openbsd_pkg:
+    name:
+      - go
+      - git
+    state: present
+  when: not pf_exporter_binary.stat.exists
+
+- name: Ensure build directory exists
+  file:
+    path: /usr/local/src
+    state: directory
+    mode: '0755'
+  when: not pf_exporter_binary.stat.exists
+
+- name: Clone pf_exporter repository
+  git:
+    repo: 'https://github.com/mischief/pf_exporter.git'
+    dest: /usr/local/src/pf_exporter
+    version: master
+    force: yes
+  when: not pf_exporter_binary.stat.exists
+
+- name: Build pf_exporter binary
+  command: go build -o pf_exporter
+  args:
+    chdir: /usr/local/src/pf_exporter
+  environment:
+    GOPATH: /root/go
+  when: not pf_exporter_binary.stat.exists
+
+- name: Move binary to /usr/local/bin
+  copy:
+    src: /usr/local/src/pf_exporter/pf_exporter
+    dest: /usr/local/bin/pf_exporter
+    mode: '0755'
+    owner: root
+    group: wheel
+    remote_src: yes
+  when: not pf_exporter_binary.stat.exists
+
+- name: Launch pf_exporter in background (non-blocking)
+  shell: "nohup /usr/local/bin/pf_exporter -web.listen-address=:9107 > /var/log/pf_exporter.log 2>&1 &"
+  args:
+    executable: /bin/sh
+  changed_when: false

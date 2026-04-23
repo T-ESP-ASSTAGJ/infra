@@ -1,0 +1,14 @@
+
+- name: Copy packet filter conf files
+  ansible.builtin.copy:
+    src: "{{ item }}"
+    dest: "/etc/"
+  with_fileglob:
+    - "../ressources/packetfilter/*"
+
+- name: enable ip forwarding
+  ansible.builtin.command: sysctl -w net.inet.ip.forwarding=1 && sysctl -w net.inet6.ip6.forwarding=1
+  notify:
+    - apply changes to pf
+    - enable pf at boot
+    - restart the network service
