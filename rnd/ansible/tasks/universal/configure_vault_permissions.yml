@@ -1,0 +1,23 @@
+- name: "[{{ current_app.name }}] Create/Update Vault Policy"
+  community.hashi_vault.vault_write:
+    url: "http://127.0.0.1:8200"
+    token: "{{ vaultserver_token }}"
+    path: "sys/policies/acl/{{ current_app.name }}-app-policy"
+    data:
+      policy: "{{ lookup('template', '../ressources/vault/template_policy.hcl.j2') }}"
+  delegate_to: vaultserver
+
+- name: "[{{ current_app.name }}] Create/Update Vault Kubernetes Role"
+  community.hashi_vault.vault_write:
+    url: "http://127.0.0.1:8200"
+    token: "{{ vaultserver_token }}"
+    path: "auth/kubernetes/role/{{ current_app.name }}-app-role"
+    data:
+      bound_service_account_names:
+        - "{{ current_app.service_account_name }}"
+      bound_service_account_namespaces:
+        - "{{ current_app.namespace }}"
+      policies:
+        - "{{ current_app.name }}-app-policy"
+      ttl: "24h"
+  delegate_to: vaultserver

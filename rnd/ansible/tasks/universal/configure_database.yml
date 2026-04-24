@@ -1,0 +1,93 @@
+- name: Check if the Postgres cluster already exists
+  kubernetes.core.k8s_info:
+    api_version: postgresql.cnpg.io/v1
+    kind: Cluster
+    name: "{{ database.name }}-database-cluster"
+    namespace: "{{ database.namespace }}"
+  register: cluster_status
+  delegate_to: masternode
+  
+- name: Reset dictionary variable
+  set_fact:
+    vault_mounts: {}
+
+- name: Check if the database secret engine is already enabled
+  community.hashi_vault.vault_read:
+    token: "{{ vaultserver_token }}"
+    url: http://127.0.0.1:8200
+    path: "sys/mounts/{{ database.name }}-database"
+  register: vault_mounts
+  delegate_to: vaultserver
+  failed_when: false
+
+- name: Debug entire register variable
+  debug:
+    var: vault_mounts
+    
+- name: Generate safe PostgreSQL superuser password
+  set_fact:
+    pg_superuser_password: "{{ lookup('community.general.random_string', 32, upper=True, lower=True, digits=True, special=False) }}"
+
+- name: Bootstrap a new database cluster
+  block:
+    - name: "1. Generate new timestamp for {{ database.name }}"
+      ansible.builtin.set_fact:
+        new_backup_timestamp: "{{ ansible_date_time.iso8601_basic_short | replace(':', '') | replace('-', '') }}"
+    
+    - name: "2. Set S3 facts for {{ database.name }}"
+      ansible.builtin.set_fact:
+        s3_endpoint_url: "{{ backup_s3_endpoint_url | default('https://example-account.r2.cloudflarestorage.com') }}"
+        s3_bucket_name: "{{ database.name }}-database"
+    
+    - name: "3. Find latest existing backup for {{ database.name }}"
+      ansible.builtin.shell: |
+        set -o pipefail
+        aws s3api list-objects-v2 \
+          --bucket {{ s3_bucket_name }} \
+          --prefix "cluster-"\
+          --delimiter "/" \
+          --endpoint-url {{ s3_endpoint_url }} \
+          --output json | \
+        jq -r '(.CommonPrefixes // [] | sort_by(.Prefix) | .[-1].Prefix? | rtrimstr("/")) // ""'
+      environment:
+        AWS_ACCESS_KEY_ID: "{{ backup_s3_access_key_id | default('replace-me') }}"
+        AWS_SECRET_ACCESS_KEY: "{{ backup_s3_secret_access_key | default('replace-me') }}"
+      register: latest_backup_result
+      changed_when: false
+          
+    - name: "Create database {{ database.name }} directory"
+      file:
+        path: "/root/.kube/ressources/{{ database.name }}-database"
+        state: directory
+        mode: '0755'
+
+    - name: Render database cluster template and copy to remote machine
+      ansible.builtin.template:
+        src: "../ressources/k8s/templates/database-cluster.yml.j2"
+        dest: "/root/.kube/ressources/{{ database.name }}-database/{{ database.name }}-database-cluster.yml"
+        mode: '0644'
+
+    - name: Apply the kubernetes database manifest
+      kubernetes.core.k8s:
+        state: present
+        src: "/root/.kube/ressources/{{ database.name }}-database/{{ database.name }}-database-cluster.yml"
+      retries: 10
+      delay: 10
+
+    - name: Wait for the Postgres cluster to report as ready before configuring Vault
+      kubernetes.core.k8s_info:
+        api_version: postgresql.cnpg.io/v1
+        kind: Cluster
+        name: "{{ database.name }}-database-cluster"
+        namespace: "{{ database.namespace }}"
+      register: cluster_info
+      until: >
+        cluster_info.resources | length > 0 and
+        cluster_info.resources[0].status is defined and
+        cluster_info.resources[0].status.readyInstances is defined and
+        cluster_info.resources[0].status.readyInstances == cluster_info.resources[0].spec.instances
+      retries: 40
+      delay: 15
+  delegate_to: masternode
+  when: cluster_status.resources | length == 0
+  

@@ -1,0 +1,21 @@
+- name: Ensure the destination directory exists
+  ansible.builtin.file:
+    path: /root/.kube/ressources/cnpg/
+    state: directory
+    mode: '0755'
+  run_once: true
+
+- name: Download the CloudNativePG manifest locally
+  ansible.builtin.get_url:
+    url: https://raw.githubusercontent.com/cloudnative-pg/cloudnative-pg/release-1.26/releases/cnpg-1.26.1.yaml
+    dest: /root/.kube/ressources/cnpg/
+    mode: '0644'
+  run_once: true
+
+- name: Install or update CloudNativePG operator from local manifest
+  kubernetes.core.k8s:
+    state: present
+    src: /root/.kube/ressources/cnpg/cnpg-1.26.1.yaml 
+    server_side_apply:
+      field_manager: ansible
+      

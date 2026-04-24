@@ -1,0 +1,588 @@
+- hosts: all
+  become: yes
+  
+  environment:
+    KUBECONFIG: /etc/rancher/rke2/rke2.yaml
+    VAULT_ADDR: http://127.0.0.1:8200
+    
+  
+  vars_files:
+    - ../vaulted_secrets.example.yml
+  
+  vars:
+    
+    timezone: "Europe/Paris"
+    ntp_servers:
+      - "2.fr.pool.ntp.org"
+      - "2.europe.pool.ntp.org"
+      - "pool.ntp.org"
+        
+    kube_api_url: "https://192.168.10.13:6443"
+    kube_issuer: "https://kubernetes.default.svc.cluster.local"
+    
+    vault_servers:
+      - hostname: "pkiserver"
+        vault_address: "https://127.0.0.1:8200"
+      - hostname: "vaultserver"
+        vault_address: "http://127.0.0.1:8200"
+                
+    issuer_definitions:  
+      - name: "database-issuer"
+        namespace: "database"
+        type: "server"
+        ressource_directory: "cnpg"
+        intermediate_cert_name: "platform_kube_intermediate_ca"
+        issuer_service_account: "database-issuer-sa"
+        allowed_domains: "database.svc.cluster.local,database.platform.local"
+        allow_subdomains: "true"
+        pki_server_url: "https://external-pki.cert-manager.svc.cluster.local:8200"
+        pki_server_signing_path: "platform_kube_intermediate_ca/sign/database-issuer"
+        cert_manager_namespace: "cert-manager"
+        cert_manager_service_account: "cert-manager"
+        vault_server_hostname: "pkiserver"
+        certificate_requests:
+          - certificate_name: "platform-database-internal"
+            requested_domains:
+              - "platform-database-cluster-r.database.svc.cluster.local"
+              - "platform-database-cluster-rw.database.svc.cluster.local"
+              - "platform-database-cluster-ro.database.svc.cluster.local"
+              - "pooler-platform-rw.database.svc.cluster.local"
+            ip_sans:
+              - "192.168.200.40"
+          - certificate_name: "platform-database-external"
+            requested_domains:
+              - "database.platform.local"
+              
+      - name: "bytebase-issuer"
+        namespace: "bytebase"
+        type: "server"
+        ressource_directory: "bytebase"
+        intermediate_cert_name: "platform_kube_intermediate_ca"
+        issuer_service_account: "bytebase-issuer-sa"
+        allowed_domains: "bytebase.svc.cluster.local,bytebase.platform.local"
+        allow_subdomains: "true"
+        pki_server_url: "https://external-pki.cert-manager.svc.cluster.local:8200"
+        pki_server_signing_path: "platform_kube_intermediate_ca/sign/bytebase-issuer"
+        cert_manager_namespace: "cert-manager"
+        cert_manager_service_account: "cert-manager"
+        vault_server_hostname: "pkiserver"
+        certificate_requests:
+          - certificate_name: "bytebase-database-internal"
+            requested_domains:
+              - "bytebase-database-cluster-r.bytebase.svc.cluster.local"
+              - "bytebase-database-cluster-rw.bytebase.svc.cluster.local"
+              - "bytebase-database-cluster-ro.bytebase.svc.cluster.local"
+              - "pooler-bytebase-rw.bytebase.svc.cluster.local"
+            ip_sans:
+              - "192.168.200.40"
+          - certificate_name: "bytebase-database-external"
+            requested_domains:
+              - "bytebase.platform.local"
+
+      - name: "kong-bytebase-gateway-server-issuer"
+        namespace: "bytebase"
+        type: "server"
+        ressource_directory: "bytebase"
+        intermediate_cert_name: "platform_kube_intermediate_ca"
+        issuer_service_account: "kong-bytebase-gateway-issuer-sa"
+        allowed_domains: "bytebase.svc.cluster.local, bytebase-ui.platform.local, svc"
+        allow_subdomains: "true"
+        pki_server_url: "https://external-pki.cert-manager.svc.cluster.local:8200"
+        pki_server_signing_path: "platform_kube_intermediate_ca/sign/kong-bytebase-gateway-server-issuer"
+        cert_manager_namespace: "cert-manager"
+        cert_manager_service_account: "cert-manager"
+        vault_server_hostname: "pkiserver"
+        certificate_requests:
+          - certificate_name: "bytebase-gateway-external"
+            requested_domains:
+              - "bytebase-ui.platform.local"
+            ip_sans:
+              - "192.168.200.70"
+
+          - certificate_name: "bytebase-gateway-dp"
+            common_name: "bytebase-gateway-kong-admin.bytebase.svc.cluster.local"
+            requested_domains:
+              - "bytebase-gateway-kong-admin.bytebase.svc.cluster.local"
+              - "pod.bytebase-gateway-kong-admin.bytebase.svc"
+
+      - name: "kong-bytebase-gateway-client-issuer"
+        namespace: "bytebase"
+        type: "client"
+        ressource_directory: "cnpg"
+        intermediate_cert_name: "platform_kube_intermediate_ca"
+        issuer_service_account: "kong-bytebase-gateway-client-issuer-sa"
+        allow_subdomains: "false"
+        pki_server_url: "https://external-pki.cert-manager.svc.cluster.local:8200"
+        pki_server_signing_path: "platform_kube_intermediate_ca/sign/kong-bytebase-gateway-client-issuer"
+        cert_manager_namespace: "cert-manager"
+        cert_manager_service_account: "cert-manager"
+        kube_issuer: "https://kubernetes.default.svc.cluster.local"
+        vault_server_hostname: "pkiserver"
+        certificate_requests:
+          - certificate_name: "bytebase-gateway-cp"
+            common_name: "bytebase-gateway-controller"
+            usage: client
+      
+      - name: "kong-database-gateway-server-issuer"
+        namespace: "database"
+        type: "server"
+        ressource_directory: "cnpg"
+        intermediate_cert_name: "platform_kube_intermediate_ca"
+        issuer_service_account: "kong-database-gateway-issuer-sa"
+        allowed_domains: "database.svc.cluster.local, database.platform.local, svc"
+        allow_subdomains: "true"
+        pki_server_url: "https://external-pki.cert-manager.svc.cluster.local:8200"
+        pki_server_signing_path: "platform_kube_intermediate_ca/sign/kong-database-gateway-server-issuer"
+        cert_manager_namespace: "cert-manager"
+        cert_manager_service_account: "cert-manager"
+        vault_server_hostname: "pkiserver"
+        certificate_requests:
+          - certificate_name: "platform-database-external"
+            requested_domains:
+              - "database.platform.local"          
+                
+          - certificate_name: "database-gateway-dp"
+            common_name: "database-gateway-kong-admin.database.svc.cluster.local"
+            requested_domains:
+              - "database-gateway-kong-admin.database.svc.cluster.local"
+              - "pod.database-gateway-kong-admin.database.svc"
+              
+      - name: "kong-database-gateway-client-issuer"
+        namespace: "database"
+        type: "client"
+        ressource_directory: "cnpg"
+        intermediate_cert_name: "platform_kube_intermediate_ca"
+        issuer_service_account: "kong-database-gateway-client-issuer-sa"
+        allow_subdomains: "false"
+        pki_server_url: "https://external-pki.cert-manager.svc.cluster.local:8200"
+        pki_server_signing_path: "platform_kube_intermediate_ca/sign/kong-database-gateway-client-issuer"
+        cert_manager_namespace: "cert-manager"
+        cert_manager_service_account: "cert-manager"
+        kube_issuer: "https://kubernetes.default.svc.cluster.local"
+        vault_server_hostname: "pkiserver"
+        certificate_requests:
+          - certificate_name: "database-gateway-cp"
+            common_name: "database-gateway-controller"
+            usage: client
+            
+      - name: "kong-monitoring-gateway-server-issuer"
+        namespace: "monitoring"
+        type: "server"
+        ressource_directory: "monitoring"
+        intermediate_cert_name: "platform_kube_intermediate_ca"
+        issuer_service_account: "kong-monitoring-gateway-issuer-sa"
+        allowed_domains: "monitoring.svc.cluster.local, monitoring.platform.local, svc"
+        allow_subdomains: "true"
+        pki_server_url: "https://external-pki.cert-manager.svc.cluster.local:8200"
+        pki_server_signing_path: "platform_kube_intermediate_ca/sign/kong-monitoring-gateway-server-issuer"
+        cert_manager_namespace: "cert-manager"
+        cert_manager_service_account: "cert-manager"
+        vault_server_hostname: "pkiserver"
+        certificate_requests:
+          - certificate_name: "monitoring-gateway-dp"
+            common_name: "monitoring-gateway-kong-admin.monitoring.svc.cluster.local"
+            requested_domains:
+              - "monitoring-gateway-kong-admin.monitoring.svc.cluster.local"
+              - "pod.monitoring-gateway-kong-admin.monitoring.svc"
+      - name: "kong-monitoring-gateway-client-issuer"
+        namespace: "monitoring"
+        type: "client"
+        ressource_directory: "cnpg"
+        intermediate_cert_name: "platform_kube_intermediate_ca"
+        issuer_service_account: "kong-monitoring-gateway-client-issuer-sa"
+        allow_subdomains: "false"
+        pki_server_url: "https://external-pki.cert-manager.svc.cluster.local:8200"
+        pki_server_signing_path: "platform_kube_intermediate_ca/sign/kong-monitoring-gateway-client-issuer"
+        cert_manager_namespace: "cert-manager"
+        cert_manager_service_account: "cert-manager"
+        kube_issuer: "https://kubernetes.default.svc.cluster.local"
+        vault_server_hostname: "pkiserver"
+        certificate_requests:
+          - certificate_name: "monitoring-gateway-cp"
+            common_name: "monitoring-gateway-controller"
+            usage: client
+            
+      - name: "monitoring-issuer"
+        namespace: "monitoring"
+        type: "server"
+        ressource_directory: "monitoring"
+        intermediate_cert_name: "platform_kube_intermediate_ca"
+        issuer_service_account: "monitoring-issuer-sa"
+        allowed_domains: "monitoring.svc.cluster.local,monitoring.platform.local"
+        allow_subdomains: "true"
+        pki_server_url: "https://external-pki.cert-manager.svc.cluster.local:8200"
+        pki_server_signing_path: "platform_kube_intermediate_ca/sign/monitoring-issuer"
+        cert_manager_namespace: "cert-manager"
+        cert_manager_service_account: "cert-manager"
+        vault_server_hostname: "pkiserver"
+        certificate_requests:
+          - certificate_name: "platform-monitoring"
+            requested_domains:
+              - "monitoring.platform.local"
+      - name: "bytebase-client-issuer"
+        namespace: "bytebase"
+        type: "client"
+        ressource_directory: "bytebase"
+        intermediate_cert_name: "platform_kube_intermediate_ca"
+        issuer_service_account: "bytebase-issuer-sa"
+        allow_subdomains: "false"
+        pki_server_url: "https://external-pki.cert-manager.svc.cluster.local:8200"
+        pki_server_signing_path: "platform_kube_intermediate_ca/sign/bytebase-client-issuer"
+        cert_manager_namespace: "cert-manager"
+        cert_manager_service_account: "cert-manager"
+        kube_issuer: "https://kubernetes.default.svc.cluster.local"
+        vault_server_hostname: "pkiserver"
+        certificate_requests:
+          - certificate_name: "bytebase-client-vault"
+            common_name: "bytebase-vault-client"
+            usage: client
+    
+    gateway_definitions:
+      - name: "database"
+        namespace: "database"
+        pki_root_ca_path: "platform_internal_root_ca/cert/ca"
+        ressource_directory: "cnpg"
+        mtls_secret_name: "database-gateway-dp-tls"
+        cp_tls_secret_name: "database-gateway-cp-tls"
+        dp_tls_secret_name: "database-gateway-dp-tls"
+        external_ip: "192.168.200.40"
+        listeners:
+          - name: "pgsql"
+            port: 5432
+            protocol: "TCP"
+#            hostname: "database.platform.local"
+#            mode: "Passthrough"
+#            tls_secret_name: "platform-database-external-tls"
+          - name: "bytebase"
+            port: 5433
+            protocol: "TCP"
+#            hostname: "bytebase.platform.local"
+#            mode: "Passthrough"
+#            tls_secret_name: "platform-database-external-tls"
+        routes:
+          - name: "tls-platform-database-pooler"
+            type: "TCPRoute"
+            parent_listener: "pgsql"
+            backends:
+              - name: "pooler-platform-rw"
+                kind: "Service"
+                port: 5432
+                namespace: "database"          
+          
+          - name: "tcp-bytebase-database-pooler"
+            type: "TCPRoute"
+            parent_listener: "bytebase"
+            backends:
+              - name: "pooler-bytebase-rw"
+                kind: "Service"
+                port: 5432
+                namespace: "bytebase"
+                
+      - name: "monitoring"
+        namespace: "monitoring"
+        pki_root_ca_path: "platform_internal_root_ca/cert/ca"
+        ressource_directory: "monitoring"
+        mtls_secret_name: "monitoring-gateway-dp-tls"
+        cp_tls_secret_name: "monitoring-gateway-cp-tls"
+        dp_tls_secret_name: "monitoring-gateway-dp-tls"
+        external_ip: "192.168.200.50"
+        listeners:
+          - name: "https-global"
+            port: 443
+            protocol: "HTTPS"
+            hostname: "monitoring.platform.local"
+            mode: "Terminate"
+            tls_secret_name: "platform-monitoring-tls"
+        routes:
+          - name: "http-grafana"
+            type: "HTTPRoute"
+            parent_listener: "https-global"
+            match_path:
+              - "/grafana"
+            rewrite_path: true
+            backends:
+              - name: "my-grafana"
+                kind: "Service"
+                port: 80
+                namespace: "monitoring"
+                
+          - name: "http-prometheus"
+            type: "HTTPRoute"
+            parent_listener: "https-global"
+            match_path:
+              - "/prometheus"
+            rewrite_path: false
+            backends:
+              - name: "prometheus-operated"
+                kind: "Service"
+                port: 9090
+                namespace: "monitoring"
+                
+          - name: "http-hubble"
+            type: "HTTPRoute"
+            parent_listener: "https-global"
+            match_path:
+              - "/hubble/"
+            rewrite_path: true
+            backends:
+              - name: "hubble-ui"
+                kind: "Service"
+                port: 80
+                namespace: "kube-system"
+
+          - name: "http-longhorn"
+            type: "HTTPRoute"
+            parent_listener: "https-global"
+            match_path:
+              - "/longhorn"
+            rewrite_path: true
+            backends:
+              - name: "longhorn-frontend"
+                kind: "Service"
+                port: 80
+                namespace: "longhorn-system"
+
+          - name: "http-openobserve"
+            type: "HTTPRoute"
+            parent_listener: "https-global"
+            match_path:
+              - "/open-observe/"
+            rewrite_path: false
+            backends:
+              - name: "openobserve"
+                kind: "Service"
+                port: 5080
+                namespace: "monitoring"
+                
+          
+                
+                
+      - name: "bytebase"
+        namespace: "bytebase"
+        pki_root_ca_path: "platform_internal_root_ca/cert/ca"
+        ressource_directory: "bytebase"
+        mtls_secret_name: "bytebase-gateway-dp-tls"
+        cp_tls_secret_name: "bytebase-gateway-cp-tls"
+        dp_tls_secret_name: "bytebase-gateway-dp-tls"
+        external_ip: "192.168.200.70"
+        listeners:
+          - name: "https-global"
+            port: 443
+            protocol: "HTTPS"
+            hostname: "bytebase-ui.platform.local"
+            mode: "Terminate"
+            tls_secret_name: "bytebase-gateway-external-tls"
+        routes:
+          - name: "http-bytebase"
+            type: "HTTPRoute"
+            parent_listener: "https-global"
+            match_path:
+              - "/"
+            rewrite_path: false
+            backends:
+              - name: "bytebase-ui"
+                kind: "Service"
+                port: 80
+                namespace: "bytebase"
+
+    database_definitions:
+      - name: "platform"
+        custom_image: "ghcr.io/example/platform-postgres-custom:18"
+        namespace: "database"
+        tls_secret_name: "platform-database-internal-tls"
+        url: "192.168.200.40"
+        port: "5432"
+        replicas: "3"
+        vault_secured: true
+        restore_from_backup: true
+        postInitApplicationSQL:
+        extensions:
+          - "hypopg"
+          - "pg_stat_monitor"
+          - "pg_stat_statements"
+          - "pgaudit"
+          - "pgcrypto"
+          - "uuid-ossp"
+          - "vector"
+      
+      - name: "bytebase"
+        namespace: "bytebase"
+        tls_secret_name: "bytebase-database-internal-tls"
+        url: "192.168.200.40"
+        port: "5433"
+        replicas: "1"
+        vault_secured: false
+        restore_from_backup: true
+        postInitApplicationSQL:
+          - "CREATE ROLE bytebase WITH LOGIN PASSWORD 'REPLACE_ME'"
+          - "GRANT CONNECT ON DATABASE bytebase TO bytebase"
+          - "GRANT ALL PRIVILEGES ON DATABASE bytebase TO bytebase"
+          - "ALTER SCHEMA public OWNER TO bytebase"
+          - "GRANT ALL PRIVILEGES ON SCHEMA public TO bytebase"
+        
+        
+    secret_base_path: "platform"
+    secret_definitions:
+      - name: "billing_keys"
+        type: "kv"
+        data: "{{ stripe_secrets_data }}" 
+
+      - name: "openai_keys"
+        type: "kv"
+        data: "{{ openai_secrets_data }}" 
+
+      - name: "sso_keys"
+        type: "kv"
+        data: "{{ sso_secrets_data }}" 
+
+      - name: "queue_credentials"
+        type: "kv"
+        data: "{{ queue_secrets_data }}" 
+
+      - name: "auth_jwt_key"
+        type: "transit"
+        key_type: "ecdsa-p256"
+        config:
+          allow_plaintext_backup: false
+          
+      - name: "platform"
+        type: "database"
+        db_url: "192.168.200.40"
+        db_port: "5432"
+        db_name: "platform"
+        credentials_namespace: "database"
+        roles:
+          - name: "readwrite-role"
+            default_ttl: 3600
+            max_ttl: 3600
+            creation_statements:
+              - "CREATE ROLE \"{{ '{{name}}' }}\" WITH LOGIN PASSWORD '{{ '{{password}}' }}' VALID UNTIL '{{ '{{expiration}}' }}';"
+              - "GRANT CONNECT ON DATABASE \"platform\" TO \"{{ '{{name}}' }}\";"
+              - "GRANT USAGE ON SCHEMA public TO \"{{ '{{name}}' }}\";"
+              - "GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO \"{{ '{{name}}' }}\";"
+              - "GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO \"{{ '{{name}}' }}\";"
+
+          - name: "admin-role"
+            default_ttl: 14400
+            max_ttl: 14400
+            creation_statements:
+              - "CREATE ROLE \"{{ '{{name}}' }}\" WITH LOGIN PASSWORD '{{ '{{password}}' }}' VALID UNTIL '{{ '{{expiration}}' }}';"
+              - "GRANT \"platform-user\" TO \"{{ '{{name}}' }}\";"
+        
+    app_definitions:
+      - name: "auth-server"
+        namespace: "platform"
+        service_account_name: "auth-server-sa"
+        permissions:
+          - secret: "auth_jwt_key" 
+            access: "sign"          
+          - secret: "sso_keys" 
+            access: "read"
+          - secret: "platform"
+            access: "read"
+
+      - name: "api"
+        namespace: "platform"
+        service_account_name: "api-sa"
+        permissions:
+          - secret: "billing_keys" 
+            access: "read"
+          - secret: "auth_jwt_key" 
+            access: "verify"
+          - secret: "platform"
+            access: "read"
+            
+      - name: "ai-worker"
+        namespace: "platform"
+        service_account_name: "ai-worker-sa"
+        permissions:
+          - secret: "openai_keys"
+            access: "read"
+          - secret: "platform"
+            access: "read"
+            
+      - name: "item-updater-worker"
+        namespace: "platform"
+        service_account_name: "ai-worker-sa"
+        permissions:
+          - secret: "openai_keys"
+            access: "read"
+          - secret: "platform"
+            access: "read"
+
+  tasks:
+    - name: Sync system clock
+      include_tasks: ../tasks/sync_system_clock.yml
+
+    - name: Install linux utils
+      include_tasks: ../tasks/install_linux_utils.yml
+
+    - name: Install Kubernetes RKE2
+      include_tasks: ../tasks/setup_rke2_worker.yml
+
+    - name: Enable & configure Kubernetes auth for each server
+      include_tasks: ../tasks/universal/configure_vault_auth.yml
+      loop: "{{ vault_servers }}"
+      loop_control:
+        loop_var: server
+
+    - name: Configure certificate issuers and request associated certificates
+      include_tasks: ../tasks/universal/configure_certificate_issuer.yml
+      loop: "{{ issuer_definitions }}"
+      loop_control:
+        loop_var: issuer
+
+    - name: Configure required gateway(s) and route(s)
+      include_tasks: ../tasks/universal/configure_gateway_and_routes.yml
+      loop: "{{ gateway_definitions }}"
+      loop_control:
+        loop_var: gateway
+
+    - name: Install cnpg
+      block:
+        - include_tasks: ../tasks/database/install_cnpg.yml
+      delegate_to: masternode
+      run_once: true
+
+    - name: Configure database(s)
+      include_tasks: ../tasks/universal/configure_database.yml
+      loop: "{{ database_definitions }}"
+      loop_control:
+        loop_var: database
+        label: "{{ database.name }}"
+
+    - name: Configure Vault Agent
+      block:
+        - include_tasks: ../tasks/vault_agent/setup_vault_agent.yml
+      delegate_to: masternode
+
+    - name: Install bytebase
+      block:
+        - include_tasks: ../tasks/database/install_bytebase.yml
+      delegate_to: masternode
+
+    - name: Install Grafana
+      block:
+        - include_tasks: ../tasks/monitoring/install_grafana.yml
+      delegate_to: masternode
+      run_once: true
+
+    - name: Install Open Observe
+      block:
+        - include_tasks: ../tasks/monitoring/install_openObserve.yml
+      delegate_to: masternode
+      run_once: true
+      
+    - name: Configure vault secrets
+      include_tasks: ../tasks/universal/configure_vault_secrets.yml
+      loop: "{{ secret_definitions }}"
+      loop_control:
+        loop_var: current_secret
+
+    - name: Configure vault permissions
+      include_tasks: ../tasks/universal/configure_vault_permissions.yml
+      loop: "{{ app_definitions }}"
+      loop_control:
+        loop_var: current_app
+      
+    
