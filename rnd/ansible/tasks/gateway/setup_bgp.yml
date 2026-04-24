@@ -1,0 +1,13 @@
+
+- name: Copy bgp conf files
+  ansible.builtin.copy:
+    src: "{{ item }}"
+    dest: "/etc/"
+  with_fileglob:
+    - "../ressources/bgp/*"
+
+- name: enable bgp
+  ansible.builtin.command: rcctl enable bgpd
+  
+- name: start bgp
+  ansible.builtin.command: rcctl start bgpd

@@ -1,0 +1,61 @@
+- hosts: all
+  become: yes
+  vars_files:
+    - ../network_vars.yml
+  
+  vars:
+    timezone: "Europe/Paris"
+    ntp_servers:
+      - "2.fr.pool.ntp.org"
+      - "2.europe.pool.ntp.org"
+      - "pool.ntp.org"
+
+  tasks:
+    - name: Setup the dhcp client on the bridge interface
+      include_tasks: ../tasks/gateway/setup_dhcp_client.yml
+
+    - name: Remove the default route
+      include_tasks: ../tasks/gateway/setup_default_gateway.yml
+      
+    - name : Install BSD utils
+      include_tasks: ../tasks/gateway/install_BSD_utils.yml
+      
+    - name: Setup the DNS server
+      include_tasks: ../tasks/gateway/setup_dns_server.yml
+
+    - name: Setup the dhcp server
+      include_tasks: ../tasks/gateway/setup_dhcp_server.yml
+
+    - name: Setup the packet filtering
+      include_tasks: ../tasks/gateway/setup_packet_filter.yml
+
+    - name: Setup BGP daemon
+      include_tasks: ../tasks/gateway/setup_bgp.yml
+
+#    - name: Configure PF exporter
+#      include_tasks: ../tasks/gateway/configure_pf_exporter.yml
+      
+
+
+  handlers:
+    - name: enable dns server on reboot
+      command: rcctl enable unbound
+      
+    - name: start the dns server
+      command: rcctl start unbound
+
+    - name: enable dhcp server on reboot
+      command: rcctl enable dhcpd
+
+    - name: start the dhcp server
+      command: rcctl start dhcpd
+
+    - name: apply changes to pf
+      command: pfctl -f /etc/pf.conf
+
+    - name: enable pf at boot
+      command: pfctl -e
+      ignore_errors: true
+
+    - name: restart the network service
+      command: sh /etc/netstart

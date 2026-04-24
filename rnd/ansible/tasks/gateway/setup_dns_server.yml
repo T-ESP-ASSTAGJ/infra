@@ -1,0 +1,49 @@
+- name: Install unbound
+  ansible.builtin.raw: pkg_add unbound
+
+- name: Copy unbound conf files
+  ansible.builtin.copy:
+    src: "{{ item }}"
+    dest: "/var/unbound/etc/"
+  with_fileglob:
+    - "../ressources/dns/*"
+
+- name: Set correct ownership for Unbound config directory
+  ansible.builtin.raw: chown -R _unbound:_unbound /var/unbound/etc
+    
+- name: Set correct permissions for Unbound config directory
+  ansible.builtin.raw: chmod 750 /var/unbound/etc
+  
+- name: Setup unbound control
+  ansible.builtin.raw: unbound-control-setup
+  
+- name: Reload unbound
+  ansible.builtin.raw: rcctl enable unbound && rcctl restart unbound
+  
+- name: Add Quad9 DNS redirection
+  ansible.builtin.raw: unbound-control forward_add . 9.9.9.9 149.112.112.112
+
+- name: Enable unbound logging
+  ansible.builtin.raw: unbound-control log_reopen
+  
+- name: Check Unbound configuration
+  ansible.builtin.raw: unbound-checkconf
+
+- name: Disable resolvd
+  ansible.builtin.raw: rcctl disable resolvd
+
+- name: Add local DNS
+  ansible.builtin.raw: echo "nameserver 127.0.0.1" > /etc/resolv.conf
+
+- name: Change file permissions
+  ansible.builtin.raw: chmod 644 /etc/resolv.conf
+
+- name: Force handler to run
+  command: echo "Forcing handler to run"
+  changed_when: true
+  notify: 
+    - restart the network service
+    - enable dns server on reboot
+    - start the dns server
+    
+
