@@ -1,0 +1,37 @@
+mode: daemonset
+
+presets:
+  logsCollection:
+    enabled: true
+    includeCollectorLogs: false
+  kubernetesAttributes:
+    enabled: true
+  hostMetrics:
+    enabled: false
+
+resources:
+  limits:
+    memory: 256Mi
+    cpu: 200m
+  requests:
+    memory: 128Mi
+    cpu: 100m
+
+config:
+  exporters:
+    otlphttp/quickwit:
+      endpoint: http://quickwit.monitoring.svc.cluster.local:7281/api/v1/otel-logs-v0_7
+
+  processors:
+    batch: {}
+    memory_limiter:
+      check_interval: 5s
+      limit_percentage: 80
+      spike_limit_percentage: 25
+
+  service:
+    pipelines:
+      logs:
+        receivers: [filelog]
+        processors: [memory_limiter, batch]
+        exporters: [otlphttp/quickwit]

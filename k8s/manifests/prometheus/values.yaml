@@ -1,0 +1,38 @@
+prometheus:
+  prometheusSpec:
+    retention: 7d
+    resources:
+      requests:
+        memory: "512Mi"
+        cpu: "200m"
+      limits:
+        memory: "1Gi"
+        cpu: "500m"
+
+grafana:
+  resources:
+    requests:
+      memory: "128Mi"
+      cpu: "100m"
+    limits:
+      memory: "256Mi"
+      cpu: "200m"
+
+  additionalDataSources:
+    - name: Quickwit
+      type: quickwit-datasource
+      url: http://quickwit-searcher.monitoring.svc.cluster.local:7280
+      access: proxy
+      isDefault: false
+
+  plugins:
+    - quickwit-datasource
+
+alertmanager:
+  enabled: false
+
+nodeExporter:
+  enabled: true
+
+kubeStateMetrics:
+  enabled: true
