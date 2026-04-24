@@ -28,6 +28,15 @@
     KUBECONFIG: /etc/kubernetes/admin.conf
   changed_when: false
 
+- name: Wait for ESO webhook to be ready
+  ansible.builtin.command: >
+    kubectl rollout status deployment/external-secrets-webhook
+    -n external-secrets
+    --timeout=120s
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  changed_when: false
+
 - name: Copy ClusterSecretStore manifest
   ansible.builtin.template:
     src: clustersecretstore.yaml.j2
@@ -48,6 +57,13 @@
 
 - name: Apply ExternalSecret
   ansible.builtin.command: kubectl apply -f /tmp/externalsecret.yaml
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  changed_when: false
+
+- name: Create argocd namespace if not exists
+  ansible.builtin.command: >
+    kubectl create namespace argocd --dry-run=client -o yaml | kubectl apply -f -
   environment:
     KUBECONFIG: /etc/kubernetes/admin.conf
   changed_when: false
