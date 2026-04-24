@@ -18,15 +18,25 @@ grafana:
       memory: "256Mi"
       cpu: "200m"
 
+  extraInitContainers:
+    - name: install-quickwit-plugin
+      image: busybox
+      command:
+        - sh
+        - -c
+        - |
+          wget -O /tmp/quickwit-plugin.zip https://github.com/quickwit-oss/quickwit-datasource/releases/latest/download/quickwit-quickwit-datasource.zip
+          unzip /tmp/quickwit-plugin.zip -d /var/lib/grafana/plugins/
+      volumeMounts:
+        - name: grafana-storage
+          mountPath: /var/lib/grafana
+
   additionalDataSources:
     - name: Quickwit
       type: quickwit-quickwit-datasource
       url: http://quickwit-searcher.monitoring.svc.cluster.local:7280
       access: proxy
       isDefault: false
-
-  plugins:
-    - quickwit-quickwit-datasource
 
 alertmanager:
   enabled: false
