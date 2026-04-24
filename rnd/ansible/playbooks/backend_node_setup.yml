@@ -1,0 +1,35 @@
+- hosts: all
+  become: yes
+  
+  vars:
+    timezone: "Europe/Paris"
+    ntp_servers:
+      - "2.fr.pool.ntp.org"
+      - "2.europe.pool.ntp.org"
+      - "pool.ntp.org"
+  
+  environment:
+    KUBECONFIG: /etc/rancher/rke2/rke2.yaml
+    VAULT_ADDR: https://127.0.0.1:8200
+  
+  tasks:
+    - name: Sync system clock
+      include_tasks: ../tasks/sync_system_clock.yml
+      
+    - name: Install linux utils
+      include_tasks: ../tasks/install_linux_utils.yml
+
+    - name: Install Kubernetes RKE2
+      include_tasks: ../tasks/setup_rke2_worker.yml
+      
+    - name: Install cert manager
+      block:
+        - include_tasks: ../tasks/cert_manager/install_cert_manager.yml
+      delegate_to: masternode
+      run_once: true
+      
+    - name: Install Hashicorp vault agent from control node
+      block:
+        - include_tasks: ../tasks/vault_agent/setup_vault_agent.yml
+      delegate_to: masternode
+      run_once: true

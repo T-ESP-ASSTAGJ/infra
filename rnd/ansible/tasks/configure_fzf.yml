@@ -1,0 +1,428 @@
+- name: Create temporary directory for fzf
+  tempfile:
+    state: directory
+  register: temp_dir
+
+- name: Download fzf binary
+  get_url:
+    url: "https://github.com/junegunn/fzf/releases/download/v0.64.0/fzf-0.64.0-linux_amd64.tar.gz"
+    dest: "{{ temp_dir.path }}/fzf.tar.gz"
+    mode: '0644'
+  retries: 10
+  delay: 10
+
+- name: Extract fzf binary
+  unarchive:
+    src: "{{ temp_dir.path }}/fzf.tar.gz"
+    dest: "{{ temp_dir.path }}"
+    remote_src: yes
+
+- name: Install fzf binary to /usr/local/bin
+  copy:
+    src: "{{ temp_dir.path }}/fzf"
+    dest: /usr/local/bin/fzf
+    mode: '0755'
+    remote_src: yes
+
+- name: Clean up temporary directory
+  file:
+    path: "{{ temp_dir.path }}"
+    state: absent
+
+# Configure kubectl completion and shortcuts for each user
+- name: Get list of users with home directories
+  shell: "getent passwd | grep -E '(/home/|/root)' | cut -d: -f1,6"
+  register: users_with_homes
+  changed_when: false
+
+- name: Configure bashrc for each user
+  blockinfile:
+    path: "{{ item.split(':')[1] }}/.bashrc"
+    block: |
+      # fzf and kubectl configuration
+
+      # General fzf improvements - Use an environment variable for dynamism
+      export FZF_DEFAULT_OPTS='--height 40% --reverse --border'
+
+      # kubectl aliases
+      alias k=kubectl
+      alias kgp='kubectl get pods'
+      alias kgs='kubectl get svc'
+      alias kgd='kubectl get deploy'
+      alias kgn='kubectl get nodes'
+      alias kgns='kubectl get namespaces'
+      alias kdp='kubectl describe pod'
+      alias kds='kubectl describe svc'
+      alias kdd='kubectl describe deploy'
+
+      # kubectl completion
+      source <(kubectl completion bash)
+      complete -F __start_kubectl k
+
+      # --- Dynamic fzf + kubectl functions ---
+
+      # HELPER: Two-step selector (Namespace then Pod) for cascaded filtering
+      kselect_pod_cascading() {
+          # 1. Select Namespace
+          local selected_ns=$(kubectl get namespaces | fzf --header-lines=1 --prompt='Select Namespace> ' | awk '{print $1}')
+
+          if [ -z "$selected_ns" ]; then return 1; fi
+
+          # 2. Select Pod within the chosen Namespace
+          local selection=$(kubectl get pods -n "$selected_ns" | fzf --header-lines=1 --prompt="Select Pod in $selected_ns> ")
+
+          if [ -z "$selection" ]; then return 1; fi
+
+          # Output the result: "namespace<tab>podname"
+          echo -e "$selected_ns\t$(echo "$selection" | awk '{print $1}')"
+      }
+
+      # NEW HELPER: Wrapper to execute selection and return just NS and POD
+      kselect_pod_details() {
+          local selection=$(kselect_pod_cascading)
+          if [ -n "$selection" ]; then
+              local namespace=$(echo "$selection" | awk '{print $1}')
+              local pod=$(echo "$selection" | awk '{print $2}')
+              # Return namespace and pod separated by a space
+              echo "$namespace $pod"
+          fi
+      }
+
+      # ✅ NEW HELPER: Two-step selector (Namespace then Resource) for services/deployments
+      kselect_resource_cascading() {
+          local resource_type=$1
+          local prompt_msg="Select $resource_type in"
+
+          # 1. Select Namespace
+          local selected_ns=$(kubectl get namespaces | fzf --header-lines=1 --prompt='Select Namespace> ' | awk '{print $1}')
+
+          if [ -z "$selected_ns" ]; then return 1; fi
+
+          # 2. Select Resource within the chosen Namespace
+          local selection=$(kubectl get "$resource_type" -n "$selected_ns" | fzf --header-lines=1 --prompt="$prompt_msg $selected_ns> ")
+
+          if [ -z "$selection" ]; then return 1; fi
+
+          # Output the result: "namespace<tab>resourcename"
+          echo -e "$selected_ns\t$(echo "$selection" | awk '{print $1}')"
+      }
+
+      # NEW HELPER: Get a list of common keys from a JSON log sample, focusing on the 'record' object
+      get_json_keys() {
+        local namespace=$1
+        local pod=$2
+        local container=$3
+
+        local cmd="kubectl logs -n \"$namespace\" \"$pod\""
+        if [ -n "$container" ]; then
+        cmd="$cmd -c \"$container\""
+        fi
+
+        # Take the last 1000 lines, extract unique keys from the nested 'record' object
+        eval "$cmd" | tail -n 1000 | jq -r '
+        .record? |
+        if type == "object" then
+        keys_unsorted[]
+        else
+        empty
+        end
+        ' 2>/dev/null | grep -vE '^(log_time|session_id|statement)$' | sort | uniq
+      }
+
+      # Reusable function to execute a command on specific namespace and pod
+      # Usage: kpod_action <action> <namespace> <pod> [shell_path]
+      # NOTE: This function ONLY constructs and returns the command string for history/execution.
+      kpod_action() {
+          local action=$1
+          local namespace=$2
+          local pod=$3
+          local shell_path=${4:-/bin/bash}
+          local final_cmd=""
+
+          case "$action" in
+              logsf)
+                  final_cmd="kubectl logs -f -n \"$namespace\" \"$pod\""
+                  ;;
+              exec)
+                  final_cmd="kubectl exec -it -n \"$namespace\" \"$pod\" -- \"$shell_path\""
+                  ;;
+              desc)
+                  final_cmd="kubectl describe pod -n \"$namespace\" \"$pod\""
+                  ;;
+              del)
+                  final_cmd="kubectl delete pod -n \"$namespace\" \"$pod\""
+                  ;;
+              port-forward)
+                  # Port-forward execution and history is handled in kpf()
+                  :
+                  ;;
+              *)
+                  echo "Unknown action: $action" >&2
+                  return 1
+                  ;;
+          esac
+
+          # Return the constructed command string
+          echo "$final_cmd"
+      }
+
+      # --- User-facing functions using the helpers ---
+
+      # kpod() is simplified, returns just the pod name after cascading selection
+      kpod() {
+          kselect_pod_cascading | awk '{print $2}' 
+      }
+
+      # UPDATED: klogs() now captures the full command in history.
+      # UPDATED: klogs() now prompts directly for a grep filter (optional) and captures the full command in history.
+      klogs() {
+          local details=$(kselect_pod_details)
+      
+          if [ -n "$details" ]; then
+              local namespace=$(echo "$details" | awk '{print $1}')
+              local pod=$(echo "$details" | awk '{print $2}')
+              local container_name=""
+              local grep_filter=""
+      
+              # --- 1. Container Check and Selection ---
+              local containers=$(kubectl get pod -n "$namespace" "$pod" -o json | jq -r '.spec.containers[].name' 2>/dev/null)
+              local container_count=$(echo "$containers" | grep -c .)
+      
+              if [ "$container_count" -gt 1 ]; then
+                  container_name=$(echo "$containers" | fzf --prompt="Select container in $pod> ")
+                  if [ -z "$container_name" ]; then
+                      echo "Container selection cancelled. Aborting logs."
+                      return 1
+                  fi
+              elif [ "$container_count" -eq 1 ]; then
+                   container_name=$(echo "$containers" | head -n 1)
+              fi
+      
+              # --- 2. Build Log Command and Grep Prompt ---
+              local base_command="kubectl logs -n \"$namespace\" \"$pod\""
+              if [ -n "$container_name" ]; then
+                  base_command="$base_command -c \"$container_name\""
+              fi
+      
+              echo "Selected Target: **$pod${container_name:+/$container_name}** in Namespace: **$namespace**"
+              
+              # --- Direct, Optional Grep Prompt ---
+              read -r -p "Enter grep string (optional, leave blank for full logs): " grep_filter
+      
+              # --- 3. Execute logs command and HISTORY CAPTURE ---
+              if [ -n "$grep_filter" ]; then
+                  # Filter output: strip ANSI color codes (sed) before grepping
+                  local final_cmd="$base_command | sed 's/\x1b\[[0-9;]*m//g' | grep --color=auto \"$grep_filter\""
+      
+                  history -s "$final_cmd"
+      
+                  echo "Fetching logs, filtered by '$grep_filter'..."
+                  eval "$final_cmd"
+              else
+                  # No filter: execute base command
+                  local final_cmd="$base_command"
+      
+                  history -s "$final_cmd"
+      
+                  echo "Fetching full logs..."
+                  eval "$final_cmd"
+              fi
+          fi
+      }
+
+      # NEW: klogjq - Interactive JSON log filtering (History capture included)
+      klogjq() {
+          local details=$(kselect_pod_details)
+
+          if [ -n "$details" ]; then
+          local namespace=$(echo "$details" | awk '{print $1}')
+          local pod=$(echo "$details" | awk '{print $2}')
+          local container_name=""
+          local jq_query=""
+
+          # --- Container Check and Selection ---
+          local containers=$(kubectl get pod -n "$namespace" "$pod" -o json | jq -r '.spec.containers[].name' 2>/dev/null)
+          local container_count=$(echo "$containers" | grep -c .)
+
+          if [ "$container_count" -gt 1 ]; then
+          container_name=$(echo "$containers" | fzf --prompt="Select container for $pod> ")
+          if [ -z "$container_name" ]; then return 1; fi
+          elif [ "$container_count" -eq 1 ]; then
+          container_name=$(echo "$containers" | head -n 1)
+          fi
+
+          local base_command="kubectl logs -n \"$namespace\" \"$pod\""
+          if [ -n "$container_name" ]; then
+          base_command="$base_command -c \"$container_name\""
+          fi
+
+          # --- 1. Select Key ---
+          local keys=$(get_json_keys "$namespace" "$pod" "$container_name")
+          if [ -z "$keys" ]; then
+          echo "Error: Could not extract common JSON keys. Logs may not be structured JSON." >&2
+          return 1
+          fi
+
+          local selected_key=$(echo "$keys" | fzf --prompt="Select key to filter by: ")
+              if [ -z "$selected_key" ]; then return 1; fi
+
+          # --- 2. Select Value (Correctly looks into .record) ---
+          local values_cmd="$base_command | tail -n 1000 | jq -r '.record?.\"$selected_key\"' 2>/dev/null | sort | uniq"
+
+          echo "Sampling values for key '$selected_key'..."
+          local selected_value=$(eval "$values_cmd" | fzf --prompt="Select value for $selected_key: ")
+              if [ -z "$selected_value" ]; then return 1; fi
+
+          # --- 3. Build Final Query and Execution (Correctly looks into .record) ---
+          local escaped_value=$(echo "$selected_value" | sed 's/"/\\"/g')
+          jq_query="select(.record?.\"$selected_key\" == \"$escaped_value\")"
+
+          local final_cmd="$base_command | jq -c '$jq_query'"
+
+          history -s "$final_cmd"
+
+          echo "Fetching logs with filter: $jq_query"
+          eval "$final_cmd"
+          fi
+      }
+
+      # UPDATED: Actions now get the full command from kpod_action, add to history, and execute.
+      klogsf() { 
+          local details=$(kselect_pod_details)
+          if [ -n "$details" ]; then
+              local final_cmd=$(kpod_action logsf $(echo "$details"))
+              history -s "$final_cmd"
+              eval "$final_cmd"
+          fi
+      }
+      kexec() { 
+          local details=$(kselect_pod_details)
+          if [ -n "$details" ]; then
+              local final_cmd=$(kpod_action exec $(echo "$details") /bin/bash)
+              history -s "$final_cmd"
+              eval "$final_cmd"
+          fi
+      }
+      kexecsh() { 
+          local details=$(kselect_pod_details)
+          if [ -n "$details" ]; then
+              local final_cmd=$(kpod_action exec $(echo "$details") /bin/sh)
+              history -s "$final_cmd"
+              eval "$final_cmd"
+          fi
+      }
+      kdesc() { 
+          local details=$(kselect_pod_details)
+          if [ -n "$details" ]; then
+              local final_cmd=$(kpod_action desc $(echo "$details"))
+              history -s "$final_cmd"
+              eval "$final_cmd"
+          fi
+      }
+
+      # UPDATED: kpf handles interactive input and captures the final command.
+      kpf() { 
+          local details=$(kselect_pod_details)
+          if [ -n "$details" ]; then
+              local namespace=$(echo "$details" | awk '{print $1}')
+              local pod=$(echo "$details" | awk '{print $2}')
+
+              read -p "Enter local port: " local_port
+              read -p "Enter pod port: " pod_port
+
+              if [ -n "$local_port" ] && [ -n "$pod_port" ]; then
+                  local final_cmd="kubectl port-forward -n \"$namespace\" \"$pod\" $local_port:$pod_port"
+
+                  history -s "$final_cmd"
+
+                  echo "Starting port-forward: $final_cmd"
+                  eval "$final_cmd"
+              else
+                  echo "Port-forward cancelled due to missing port."
+              fi
+          fi
+      }
+
+      # UPDATED: kdel executes only after confirmation and captures command.
+      kdel() { 
+          local details=$(kselect_pod_details)
+          if [ -n "$details" ]; then
+              local pod=$(echo "$details" | awk '{print $2}')
+              read -r -p "Are you sure you want to delete pod $pod? (yes/no): " confirmation
+              if [[ "$confirmation" =~ ^[Yy][Ee][Ss]$ ]]; then
+                  local final_cmd=$(kpod_action del $(echo "$details"))
+                  history -s "$final_cmd"
+                  eval "$final_cmd"
+              else
+                  echo "Deletion cancelled."
+              fi
+          fi
+      }
+
+      # Switch namespace (uses kubens if available)
+      kns() {
+          if command -v kubens &> /dev/null; then
+              kubens
+          else
+              local namespace=$(kubectl get namespaces | fzf --header-lines=1 | awk '{print $1}')
+              if [ -n "$namespace" ]; then
+                  local final_cmd="kubectl config set-context --current --namespace=\"$namespace\""
+                  history -s "$final_cmd"
+
+                  eval "$final_cmd"
+                  echo "Switched to namespace: $namespace"
+              fi
+          fi
+      }
+
+      # ----------------------------------------------------
+      # --- NEW: Service (ksvc) and Deployment (kdep) FZF Functions ---
+      # ----------------------------------------------------
+
+      # ✅ NEW: ksvc - Select a service name after selecting a namespace
+      ksvc() {
+          local selection=$(kselect_resource_cascading service)
+          if [ -n "$selection" ]; then
+              # Return just the resource name (Service name)
+              echo "$selection" | awk '{print $2}'
+          fi
+      }
+
+      # ✅ NEW: kdep - Select a deployment name after selecting a namespace
+      kdep() {
+          local selection=$(kselect_resource_cascading deployment)
+          if [ -n "$selection" ]; then
+              # Return just the resource name (Deployment name)
+              echo "$selection" | awk '{print $2}'
+          fi
+      }
+    marker: "# {mark} ANSIBLE MANAGED BLOCK - fzf kubectl config"
+    create: yes
+    owner: "{{ item.split(':')[1].split('/')[-1] }}"
+    group: "{{ item.split(':')[1].split('/')[-1] }}"
+    mode: '0644'
+  loop: "{{ users_with_homes.stdout_lines }}"
+  when: item.split(':')[1] != '/sbin/nologin'
+
+# Install kubens/kubectx for additional convenience (optional)
+- name: Create /usr/local/bin if it doesn't exist
+  file:
+    path: /usr/local/bin
+    state: directory
+    mode: '0755'
+
+- name: Download kubectx
+  get_url:
+    url: https://raw.githubusercontent.com/ahmetb/kubectx/master/kubectx
+    dest: /usr/local/bin/kubectx
+    mode: '0755'
+  retries: 10
+  delay: 10
+
+- name: Download kubens
+  get_url:
+    url: https://raw.githubusercontent.com/ahmetb/kubectx/master/kubens
+    dest: /usr/local/bin/kubens
+    mode: '0755'
+  retries: 10
+  delay: 10

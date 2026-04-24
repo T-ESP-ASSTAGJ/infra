@@ -1,0 +1,9 @@
+- hosts: all
+  become: yes
+
+  tasks:
+    - name: Install linux utils
+      include_tasks: ../tasks/install_linux_utils.yml
+
+    - name: Install Kubernetes RKE2
+      include_tasks: ../tasks/setup_rke2_worker.yml

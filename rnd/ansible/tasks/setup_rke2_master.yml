@@ -1,0 +1,66 @@
+- name: Create RKE2 config directory on agents
+  ansible.builtin.file:
+    path: /etc/rancher/rke2
+    state: directory
+    mode: '0755'
+
+- name: Create RKE2 manifests directory on agents
+  ansible.builtin.file:
+    path: /var/lib/rancher/rke2/server/manifests
+    state: directory
+    mode: '0755'
+    
+- name: Create RKE2 config directory on agents
+  ansible.builtin.copy:
+    src: ../ressources/rke2/config.yaml
+    dest: /etc/rancher/rke2/
+      
+- name: Copy rke2 config file
+  ansible.builtin.copy:
+    src: ../ressources/rke2/rke2-cilium-config.yaml
+    dest: /var/lib/rancher/rke2/server/manifests/
+    
+- name: Run RKE2 server installer script
+  ansible.builtin.shell:
+    cmd: "curl -sfL https://get.rke2.io | INSTALL_RKE2_TYPE='server' sh -"
+  args:
+    creates: /usr/local/bin/rke2
+    
+- name: Enable and start the rke2-server service
+  ansible.builtin.systemd:
+    name: rke2-server
+    enabled: yes
+    state: started
+  retries: 10
+  delay: 10
+
+- name: Create permanent symlink for kubectl in /usr/local/bin
+  ansible.builtin.file:
+    src: /var/lib/rancher/rke2/bin/kubectl
+    dest: /usr/local/bin/kubectl
+    state: link
+    mode: '0755'
+
+- name: Set permanent environment variables for future logins
+  ansible.builtin.copy:
+    dest: /etc/profile.d/rke2.sh
+    mode: '0644'
+    content: |
+      export PATH=$PATH:/var/lib/rancher/rke2/bin
+      export KUBECONFIG=/etc/rancher/rke2/rke2.yaml
+
+- name: Get the join token from the server
+  ansible.builtin.shell: cat /var/lib/rancher/rke2/server/node-token
+  register: rke2_token_output
+  changed_when: false
+
+- name: Save join info to a local file for the agents
+  ansible.builtin.copy:
+    dest: "./rke2_join_info.yml"
+    mode: '0644'
+    content: |
+      rke2_server_ip: "{{ ansible_default_ipv4.address }}"
+      rke2_join_token: "{{ rke2_token_output.stdout }}"
+  delegate_to: localhost
+  become: false
+  run_once: true

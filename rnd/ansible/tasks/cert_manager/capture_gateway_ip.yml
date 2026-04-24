@@ -1,0 +1,9 @@
+- name: Register the IP
+  ansible.builtin.shell:
+    cmd: ifconfig em2 | awk '/inet / {print $2}'
+  register: kube_host
+  
+- name: Set the gateway ip in memory
+  ansible.builtin.set_fact:
+    KUBE_HOST: "{{ kube_host.stdout }}"
+  no_log: true 

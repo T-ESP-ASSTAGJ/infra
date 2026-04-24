@@ -1,0 +1,42 @@
+- name: Remove problematic alvistack repository source file
+  ansible.builtin.shell: |
+    # Find the source file in /etc/apt/sources.list.d/ that references 'alvistack'
+    SOURCE_FILE=$(grep -r -l 'alvistack' /etc/apt/sources.list.d/)
+
+    # Remove the file if it was found
+    if [ -n "$SOURCE_FILE" ]; then
+      rm -f "$SOURCE_FILE"
+      echo "Removed: $SOURCE_FILE"
+    else
+      echo "Repository file not found."
+    fi
+  args:
+    executable: /bin/bash
+  register: repo_removal
+  changed_when: "'Removed:' in repo_removal.stdout"
+  tags:
+    - fix_apt_repo
+
+- name: "Set system timezone to {{ timezone }}"
+  community.general.timezone:
+    name: "{{ timezone }}"
+
+- name: Ensure NTP client (chrony) is installed
+  ansible.builtin.package:
+    name: chrony
+    state: present
+    update_cache: yes
+
+- name: Configure chrony to use reliable public NTP pools
+  ansible.builtin.template:
+    src: ../ressources/chrony/chrony.conf.j2
+    dest: /etc/chrony/chrony.conf
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Ensure chrony service is started and enabled
+  ansible.builtin.service:
+    name: chrony
+    state: restarted
+    enabled: yes

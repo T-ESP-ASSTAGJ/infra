@@ -1,0 +1,49 @@
+---
+- name: Load join information from local file
+  ansible.builtin.include_vars:
+    file: ../playbooks/rke2_join_info.example.yml
+
+- name: Create RKE2 config directory on agents
+  ansible.builtin.file:
+    path: /etc/rancher/rke2
+    state: directory
+    mode: '0755'
+    
+- name: Create RKE2 manifests directory on agents
+  ansible.builtin.file:
+    path: /var/lib/rancher/rke2/server/manifests
+    state: directory
+    mode: '0755'
+
+- name: Copy rke2 config file
+  ansible.builtin.copy:
+    src: ../ressources/rke2/rke2-cilium-config.yaml
+    dest: /var/lib/rancher/rke2/server/manifests/
+    
+- name: Create combined RKE2 config file
+  vars:
+    base_config:
+      cni: cilium
+    agent_config:
+      server: "https://{{ rke2_server_ip }}:9345"
+      token: "{{ rke2_join_token }}"
+  ansible.builtin.copy:
+    dest: /etc/rancher/rke2/config.yaml
+    mode: '0644'
+    content: "{{ base_config | combine(agent_config) | to_nice_yaml }}"
+
+- name: Run RKE2 agent installer script
+  ansible.builtin.shell:
+    cmd: "curl -sfL https://get.rke2.io |  INSTALL_RKE2_TYPE='agent' sh -"
+  args:
+    creates: /usr/local/bin/rke2
+  retries: 10
+  delay: 10
+
+- name: Enable and start the rke2-agent service
+  ansible.builtin.systemd:
+    name: rke2-agent
+    enabled: yes
+    state: started
+  retries: 10
+  delay: 10
