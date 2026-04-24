@@ -26,7 +26,7 @@ grafana:
       isDefault: false
 
   plugins:
-    - quickwit-datasource
+    - quickwit-quickwit-datasource
 
 alertmanager:
   enabled: false
@@ -35,4 +35,7 @@ nodeExporter:
   enabled: true
 
 kubeStateMetrics:
+  enabled: true
+
+crds:
   enabled: true
