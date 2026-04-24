@@ -1,0 +1,12 @@
+.vagrant/
+vagrant/tmp/
+ansible/vault_pass
+ansible/vaulted_secrets.yml
+ansible/playbooks/rke2_join_info.yml
+ansible/playbooks/vault_keys_*.txt
+*.pem
+*.key
+*.p12
+*.crt
+*.pfx
+*.retry
