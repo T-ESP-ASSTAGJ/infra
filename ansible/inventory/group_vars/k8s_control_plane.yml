@@ -9,3 +9,5 @@ cilium_hubble_enabled: true
 
 # enable Helm install
 install_helm: true
+
+enable_ufw_firewall: true

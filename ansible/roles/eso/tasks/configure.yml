@@ -22,6 +22,13 @@
   environment:
     KUBECONFIG: /etc/kubernetes/admin.conf
 
+- name: Create jamly-api namespace if not exists
+  ansible.builtin.shell: >
+    kubectl create namespace jamly-api --dry-run=client -o yaml | kubectl apply -f -
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  changed_when: false
+
 - name: Apply SecretStore
   ansible.builtin.command: kubectl apply -f /tmp/secretstore.yaml
   environment:
@@ -62,7 +69,7 @@
   changed_when: false
 
 - name: Create argocd namespace if not exists
-  ansible.builtin.command: >
+  ansible.builtin.shell: >
     kubectl create namespace argocd --dry-run=client -o yaml | kubectl apply -f -
   environment:
     KUBECONFIG: /etc/kubernetes/admin.conf
