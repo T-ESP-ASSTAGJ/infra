@@ -43,6 +43,12 @@ variable "custom_domain_api" {
   type        = string
 }
 
+variable "custom_domain_argocd" {
+  description = "Custom domain for ArgoCD UI"
+  type        = string
+  default     = ""
+}
+
 variable "web_ssl_cert_secret_id" {
   description = "Key Vault secret ID for web SSL certificate"
   type        = string

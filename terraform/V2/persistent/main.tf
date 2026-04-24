@@ -457,6 +457,17 @@ resource "cloudflare_record" "api" {
   comment = "Managed by Terraform (persistent) - API ${local.environment} environment"
 }
 
+resource "cloudflare_record" "argocd" {
+  count   = var.custom_domain_argocd != "" && var.cloudflare_zone_id != "" ? 1 : 0
+  zone_id = var.cloudflare_zone_id
+  name    = trimsuffix(var.custom_domain_argocd, ".jamly.eu")
+  content = azurerm_public_ip.gateway.ip_address
+  type    = "A"
+  ttl     = 1
+  proxied = true
+  comment = "Managed by Terraform (persistent) - ArgoCD ${local.environment} environment"
+}
+
 # Auto-generate ephemeral/persistent.auto.tfvars — loaded automatically by Terraform alongside terraform.tfvars
 resource "local_file" "ephemeral_tfvars" {
   filename        = "${path.module}/../ephemeral/persistent.auto.tfvars"

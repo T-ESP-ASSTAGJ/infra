@@ -28,6 +28,7 @@
         --create-namespace
         --version {{ argocd_version | default('7.7.0') }}
         --set server.service.type=ClusterIP
+        --set configs.params."server\.insecure"=true
         --wait
         --timeout 300s
       environment:
