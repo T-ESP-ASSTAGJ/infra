@@ -1,0 +1,26 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: cert-manager-vault-tokenrequest
+  namespace: cert-manager 
+rules:
+  - apiGroups: [""]
+    resources: ["serviceaccounts/token"]
+    verbs: ["create"]
+    resourceNames: ["vault-auth-reviewer"] 
+
+---
+
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: cert-manager-vault-tokenrequest-binding
+  namespace: cert-manager 
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: cert-manager-vault-tokenrequest
+subjects:
+  - kind: ServiceAccount
+    name: vault-auth-reviewer 
+    namespace: cert-manager

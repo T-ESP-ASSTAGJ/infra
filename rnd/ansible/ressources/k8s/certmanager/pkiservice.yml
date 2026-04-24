@@ -1,0 +1,12 @@
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: external-pki
+  namespace: cert-manager
+spec:
+  ports:
+    - name: https-pki
+      protocol: TCP
+      port: 8200      
+      targetPort: 8200

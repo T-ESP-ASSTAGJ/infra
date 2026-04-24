@@ -1,0 +1,27 @@
+- name: Create cilium config directory on master node
+  ansible.builtin.file:
+    path: /root/.kube/ressources/cilium
+    state: directory
+    mode: '0755'
+
+- name: Copy bgp manifests to master node
+  ansible.builtin.copy:
+    src: ../ressources/k8s/cilium/ 
+    dest: /root/.kube/ressources/cilium 
+
+- name: Find the manifest files on the master node
+  ansible.builtin.find:
+    paths: /root/.kube/ressources/cilium
+    patterns:
+      - "*.yml"
+  register: found_manifests 
+
+- name: Apply bgp manifests from the master node
+  kubernetes.core.k8s:
+    state: present
+    src: "{{ item.path }}" 
+  loop: "{{ found_manifests.files }}"
+  retries: 10
+  delay: 20
+  delegate_to: masternode
+  

@@ -1,0 +1,39 @@
+- hosts: all
+  become: yes
+  
+  vars:
+    timezone: "Europe/Paris"
+    ntp_servers:
+      - "2.fr.pool.ntp.org"
+      - "2.europe.pool.ntp.org"
+      - "pool.ntp.org"
+  
+  
+  environment:
+    VAULT_ADDR: http://127.0.0.1:8200
+  
+  tasks:
+    - name: Sync system clock
+      include_tasks: ../tasks/sync_system_clock.yml
+      
+    - name: Install linux utils
+      include_tasks: ../tasks/install_linux_utils.yml
+      
+    - name: Generate vault certificate
+      block:
+        - include_tasks: ../tasks/vault/generate_vault_certs.yml
+      delegate_to: pkiserver
+      run_once: true
+
+    - name: Install & configure vault
+      include_tasks: ../tasks/vault/install_vault.yml
+
+    - name: Install certificate files
+      include_tasks: ../tasks/vault/configure_vault_tls.yml
+      
+    - name: Initiate the vault
+      include_tasks: ../tasks/vault/initiate_vault.yml
+
+    - name: Unseal vault
+      include_tasks: ../tasks/vault/unseal_vault.yml
+

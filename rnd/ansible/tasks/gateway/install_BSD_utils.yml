@@ -1,0 +1,11 @@
+- name: update drivers
+  ansible.builtin.raw: fw_update -a
+
+- name: Install curl
+  ansible.builtin.raw: pkg_add curl
+  
+- name: install nano
+  ansible.builtin.raw: pkg_add nano
+  
+- name: install drill
+  ansible.builtin.raw: pkg_add drill

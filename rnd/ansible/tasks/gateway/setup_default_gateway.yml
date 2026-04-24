@@ -1,0 +1,8 @@
+- name: Remove default gateway
+  ansible.builtin.raw: route delete default 
+  ignore_errors: yes
+
+- name : Add default gateway
+  ansible.builtin.raw: route add default {{ default_gateway }}
+
+

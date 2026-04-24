@@ -1,0 +1,20 @@
+- name: Check if kubernetes auth is already enabled
+  ansible.builtin.command: vault auth list -tls-skip-verify -format=json
+  register: auth_list
+  changed_when: false
+
+- name: Enable kubernetes auth method IF NOT already enabled
+  ansible.builtin.command: vault auth enable -tls-skip-verify kubernetes
+  when: "'kubernetes/' not in auth_list.stdout"
+    
+- name: Configure kubernetes auth
+  ansible.builtin.command:
+    cmd: vault write -tls-skip-verify auth/kubernetes/config 
+      token_reviewer_jwt="{{ AUTH_REVIEWER_TOKEN }}" 
+      kubernetes_host="https://192.168.10.13:6443" 
+      kubernetes_ca_cert="{{ RKE2_CA }}" 
+      issuer="https://kubernetes.default.svc.cluster.local"
+  when: "'kubernetes/' not in auth_list.stdout"
+
+
+      

@@ -1,0 +1,37 @@
+- name: Read Vault keys file from local machine
+  delegate_to: localhost
+  ansible.builtin.slurp:
+    src: "./vault_keys_{{ inventory_hostname }}.txt"
+  register: vault_keys_file
+  become: false
+
+- name: Extract Unseal Keys using shell
+  delegate_to: localhost
+  ansible.builtin.shell:
+    cmd: "echo \"{{ vault_keys_file['content'] | b64decode }}\" | grep 'Unseal Key' | awk '{print $4}'"
+  register: extracted_keys
+  changed_when: false
+  become: false
+
+- name: Extract Root Token using shell
+  delegate_to: localhost
+  ansible.builtin.shell:
+    cmd: "echo \"{{ vault_keys_file['content'] | b64decode }}\" | grep 'Initial Root Token' | awk '{print $4}'"
+  register: extracted_token
+  changed_when: false
+  become: false
+
+- name: Check Vault Seal Status
+  ansible.builtin.command: vault status -tls-skip-verify
+  register: vault_status
+  changed_when: false
+  failed_when: false
+
+- name: Unseal Vault (requires 3 keys)
+  ansible.builtin.command: vault operator unseal -tls-skip-verify {{ item }}
+  loop: "{{ extracted_keys.stdout_lines[0:3] }}"
+  when: vault_status.stdout is defined and vault_status.stdout | regex_search('Sealed\s+true')
+
+- name: Log in to Vault with Root Token
+  ansible.builtin.command: vault login -tls-skip-verify {{ extracted_token.stdout }}
+  changed_when: true

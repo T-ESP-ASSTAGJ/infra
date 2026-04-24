@@ -1,0 +1,20 @@
+- name: Install Prometheus and node_exporter packages
+  openbsd_pkg:
+    name:
+      - node_exporter
+    state: present
+
+- name: Ensure Prometheus config directory exists
+  file:
+    path: /etc/prometheus
+    state: directory
+    mode: '0755'
+
+- name: Enable node_exporter service
+  command: rcctl enable node_exporter
+  changed_when: false
+
+- name: Start node_exporter service
+  command: rcctl start node_exporter
+  register: start_node_exporter
+  failed_when: start_node_exporter.rc != 0 and 'already running' not in start_node_exporter.stderr

@@ -1,0 +1,180 @@
+- name: Install Kubernetes Gateway API CRDs
+  kubernetes.core.k8s:
+    state: present
+    src: "https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.3.0/experimental-install.yaml"
+  run_once: true
+  delegate_to: masternode
+  
+- name: Add the Kong Helm chart repository
+  kubernetes.core.helm_repository:
+    name: kong
+    repo_url: https://charts.konghq.com
+  delegate_to: masternode
+
+- name: Fetch the Platform CA certificate from Vault
+  community.hashi_vault.vault_read:
+    url: "https://127.0.0.1:8200"
+    token: "{{ pkiserver_token }}"
+    validate_certs: false
+    path: "{{ gateway.pki_root_ca_path }}"
+  register: vault_ca_cert
+  no_log: false
+  delegate_to: pkiserver
+
+- name: Extract the CA bundle content from the Vault response
+  ansible.builtin.set_fact:
+    ca_bundle_content: "{{ vault_ca_cert.data.data.certificate }}"
+
+- name: Create or update the Kong CA Trust Bundle secret
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Secret
+      metadata:
+        name: "{{ gateway.namespace }}-ca-bundle"
+        namespace: "{{ gateway.namespace }}"
+      stringData:
+        tls.crt: "{{ ca_bundle_content }}"
+  delegate_to: masternode
+  
+- name: Create gateway directory
+  file:
+    path: "/root/.kube/ressources/gateway"
+    state: directory
+    mode: '0755'
+  delegate_to: masternode
+
+- name: Render gatewayclass template and copy to remote machine
+  ansible.builtin.template:
+    src: "../ressources/k8s/templates/gateway-class.yml.j2"
+    dest: "/root/.kube/ressources/{{ gateway.ressource_directory }}/{{ gateway.name }}-gateway-class.yml"
+    mode: '0644'
+  delegate_to: masternode
+
+- name: Apply the gatewayClass
+  kubernetes.core.k8s:
+    state: present
+    src: "/root/.kube/ressources/{{ gateway.ressource_directory }}/{{ gateway.name }}-gateway-class.yml"
+  delegate_to: masternode
+
+- name: Render ingress controller template and copy to remote machine
+  ansible.builtin.template:
+    src: "../ressources/k8s/templates/kong-ingress-controller-values.yml.j2"
+    dest: "/root/.kube/ressources/{{ gateway.ressource_directory }}/{{ gateway.name }}-ingress-controller-values.yml"
+    mode: '0644'
+  delegate_to: masternode
+
+- name: Apply the kubernetes ingress controller using a Helm chart
+  kubernetes.core.helm:
+    name: "{{ gateway.name }}-controller"
+    chart_ref: kong/kong
+    release_namespace: "{{ gateway.namespace }}"
+    state: present
+    create_namespace: yes
+    values_files:
+      - /root/.kube/ressources/{{ gateway.ressource_directory }}/{{ gateway.name }}-ingress-controller-values.yml
+  delegate_to: masternode
+  environment:
+    KUBECONFIG: /etc/rancher/rke2/rke2.yaml
+  
+- name: Render gateway template and copy to remote machine
+  ansible.builtin.template:
+    src: "../ressources/k8s/templates/kong-gateway-values.yml.j2"
+    dest: "/root/.kube/ressources/{{ gateway.ressource_directory }}/{{ gateway.name }}-gateway-values.yml"
+    mode: '0644'
+  delegate_to: masternode
+  
+- name: Apply the kubernetes gateway using a Helm chart
+  kubernetes.core.helm:
+    name: "{{ gateway.name }}-gateway"
+    chart_ref: kong/kong
+    release_namespace: "{{ gateway.namespace }}"
+    state: present
+    create_namespace: yes
+    values_files:
+      - /root/.kube/ressources/{{ gateway.ressource_directory }}/{{ gateway.name }}-gateway-values.yml
+  delegate_to: masternode
+  environment:
+    KUBECONFIG: /etc/rancher/rke2/rke2.yaml
+
+- name: Render gateway template and copy to remote machine
+  ansible.builtin.template:
+    src: "../ressources/k8s/templates/gateway.yml.j2"
+    dest: "/root/.kube/ressources/{{ gateway.ressource_directory }}/{{ gateway.name }}-gateway.yml"
+    mode: '0644'
+  delegate_to: masternode
+  
+- name: Render prometheus kong monitoring plugin template and copy to remote machine
+  ansible.builtin.template:
+    src: "../ressources/k8s/templates/prometheus-kong-plugin.yml.j2"
+    dest: "/root/.kube/ressources/{{ gateway.ressource_directory }}/{{ gateway.name }}-prometheus-kong-plugin.yml"
+    mode: '0644'
+  delegate_to: masternode
+  
+- name: Apply the kong monitoring plugin manifest
+  kubernetes.core.k8s:
+    state: present
+    src: /root/.kube/ressources/{{ gateway.ressource_directory }}/{{ gateway.name }}-prometheus-kong-plugin.yml
+  delegate_to: masternode
+  
+- name: "DEBUG - Inspect the gateway variable"
+  ansible.builtin.debug:
+    var: gateway
+  delegate_to: masternode
+
+- name: "DEBUG THE ROUTE LOOP AND CONDITION"
+  loop: "{{ gateway.routes }}" 
+  loop_control:
+    loop_var: route
+  delegate_to: masternode
+  ansible.builtin.debug:
+    msg: "For route '{{ route.name }}', the type is '{{ route.type }}'. The template condition 'route.type == \"TCPRoute\"' evaluates to: {{ route.type == 'TCPRoute' }}" 
+  
+- name: "Render Routes for Gateway: {{ gateway.name }}"
+  loop: "{{ gateway.routes }}"
+  loop_control:
+    loop_var: route 
+  ansible.builtin.template:
+    src: "../ressources/k8s/templates/route.yml.j2"
+    dest: "/root/.kube/ressources/{{ gateway.ressource_directory }}/{{ route.name }}-{{ route.type }}.yml"
+    mode: '0644'
+  delegate_to: masternode
+
+- name: "Render ReferenceGrants for Gateway: {{ gateway.name }}"
+  loop: "{{ gateway.routes }}"
+  loop_control:
+    loop_var: route
+  ansible.builtin.template:
+    src: "../ressources/k8s/templates/reference-grant.yml.j2"
+    dest: "/root/.kube/ressources/{{ gateway.ressource_directory }}/{{ route.name }}-reference-grants.yml"
+    mode: '0644'
+  delegate_to: masternode
+
+- name: "Apply the kubernetes ReferenceGrant manifest(s)"
+  loop: "{{ gateway.routes }}"
+  loop_control:
+    loop_var: route
+  kubernetes.core.k8s:
+    state: present
+    src: "/root/.kube/ressources/{{ gateway.ressource_directory }}/{{ route.name }}-reference-grants.yml"
+  delegate_to: masternode
+  environment:
+    KUBECONFIG: /etc/rancher/rke2/rke2.yaml
+
+- name: Apply the kubernetes gateway manifest
+  kubernetes.core.k8s:
+    state: present
+    src: /root/.kube/ressources/{{ gateway.ressource_directory }}/{{ gateway.name }}-gateway.yml
+  delegate_to: masternode
+    
+- name: Apply the kubernetes route manifest(s)
+  loop: "{{ gateway.routes }}"
+  loop_control:
+    loop_var: route
+  kubernetes.core.k8s:
+    state: present
+    src: /root/.kube/ressources/{{ gateway.ressource_directory }}/{{ route.name }}-{{ route.type }}.yml
+  delegate_to: masternode
+  environment:
+    KUBECONFIG: /etc/rancher/rke2/rke2.yaml

@@ -1,0 +1,3 @@
+---
+rke2_server_ip: "192.168.10.13"
+rke2_join_token: "replace-me"

@@ -1,0 +1,368 @@
+# -----------------------------------------------------------------------------
+# Deployment parameters
+# -----------------------------------------------------------------------------
+secretVolumes:
+  - {{ gateway.dp_tls_secret_name }}
+  - {{ gateway.namespace }}-ca-bundle
+
+deployment:
+  kong:
+    # Enable or disable Kong itself
+    # Setting this to false with ingressController.enabled=true will create a
+    # controller-only release.
+    enabled: true
+  # The number of old `ReplicaSet`s to retain.
+  revisionHistoryLimit: 10
+
+  ## Minimum number of seconds for which a newly created pod should be ready without any of its container crashing,
+  ## for it to be considered available.
+  # minReadySeconds: 60
+  ## Specify the service account to create and to be assigned to the deployment / daemonset and for the migrations
+  serviceAccount:
+    create: true
+    # Automount the service account token. By default, this is disabled, and the token is only mounted on the controller
+    # container. Some sidecars require enabling this. Note that enabling this exposes Kubernetes credentials to Kong
+    # Lua code, increasing potential attack surface.
+    automountServiceAccountToken: false
+    ## Optionally specify the name of the service account to create and the annotations to add.
+    #  name:
+    #  annotations: {}
+    
+    ## Optionally specify any extra sidecar containers to be included in the deployment
+    ## See https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#container-v1-core
+    # sidecarContainers:
+    #   - name: sidecar
+    #     image: sidecar:latest
+    # initContainers:
+    # - name: initcon
+    #   image: initcon:latest
+    # hostAliases:
+    # - ip: "127.0.0.1"
+    #   hostnames:
+    #   - "foo.local"
+    #   - "bar.local"
+    
+    ## Define any volumes and mounts you want present in the Kong proxy container
+    # userDefinedVolumes:
+    # - name: "volumeName"
+    #   emptyDir: {}
+    #  userDefinedVolumeMounts:
+    #  - name: "{{ gateway.dp_tls_secret_name }}"
+    #    mountPath: "/etc/secrets/{{ gateway.dp_tls_secret_name }}"
+    #    readOnly: true
+  
+  test:
+    # Enable creation of test resources for use with "helm test"
+    enabled: false
+  # Use a DaemonSet controller instead of a Deployment controller
+  daemonset: false
+  hostNetwork: false
+  # Set the Deployment's spec.template.hostname field.
+  # This propagates to Kong API endpoints that report
+  # the hostname, such as the admin API root and hybrid mode
+  # /clustering/data-planes endpoint
+  hostname: ""
+  # kong_prefix empty dir size
+  prefixDir:
+    sizeLimit: 256Mi
+  # tmp empty dir size
+  tmpDir:
+    sizeLimit: 1Gi
+# Override namepsace for Kong chart resources. By default, the chart creates resources in the release namespace.
+# This may not be desirable when using this chart as a dependency.
+# namespace: "example"
+
+# -----------------------------------------------------------------------------
+# Kong parameters
+# -----------------------------------------------------------------------------
+
+# Specify Kong configuration
+# This chart takes all entries defined under `.env` and transforms them into into `KONG_*`
+# environment variables for Kong containers.
+# Their names here should match the names used in https://github.com/Kong/kong/blob/master/kong.conf.default
+# See https://docs.konghq.com/latest/configuration also for additional details
+# Values here take precedence over values from other sections of values.yaml,
+# e.g. setting pg_user here will override the value normally set when postgresql.enabled
+# is set below. In general, you should not set values here if they are set elsewhere.
+env:
+  database: "off"
+  # the chart uses the traditional router (for Kong 3.x+) because the ingress
+  # controller generates traditional routes. if you do not use the controller,
+  # you may set this to "traditional_compatible" or "expressions" to use the new
+  # DSL-based router
+  router_flavor: "traditional"
+  nginx_worker_processes: "2"
+  proxy_access_log: /dev/stdout
+  admin_access_log: /dev/stdout
+  admin_gui_access_log: /dev/stdout
+  portal_api_access_log: /dev/stdout
+  proxy_error_log: /dev/stderr
+  admin_error_log: /dev/stderr
+  admin_gui_error_log: /dev/stderr
+  portal_api_error_log: /dev/stderr
+  prefix: /kong_prefix/
+  admin_ssl_cert: /etc/secrets/{{ gateway.dp_tls_secret_name }}/tls.crt
+  admin_ssl_cert_key: /etc/secrets/{{ gateway.dp_tls_secret_name }}/tls.key
+  log_level: debug
+  {% set tcp_tls_listeners = gateway.listeners | selectattr('protocol', 'in', ['TCP', 'TLS']) | list %}
+  {% if tcp_tls_listeners %}
+# Dynamic stream_listen based on TCP/TLS listeners
+stream_listen: "{% for listener in tcp_tls_listeners %}0.0.0.0:{{ listener.port }}{% if listener.protocol == 'TLS' %} ssl{% endif %}{% if not loop.last %}, {% endif %}{% endfor %}"
+  {% endif %}
+
+
+# This section is any customer specific environments variables that doesn't require KONG_ prefix.
+# These custom environment variables are typicall used in custom plugins or serverless plugins to
+# access environment specific credentials or tokens.
+# Example as below, uncomment if required and add additional attributes as required.
+# Note that these environment variables will only apply to the proxy and init container. The ingress-controller
+# container has its own customEnv section.
+
+# customEnv:
+#   api_token:
+#     valueFrom:
+#       secretKeyRef:
+#         key: token
+#         name: api_key
+#   client_name: testClient
+
+customEnv:
+  TZ: "Europe/Paris"
+
+# Load all ConfigMap or Secret keys as environment variables:
+# https://kubernetes.io/docs/tasks/configure-pod-container/configure-pod-configmap/#configure-all-key-value-pairs-in-a-configmap-as-container-environment-variables
+envFrom: []
+
+# This section can be used to configure some extra labels that will be added to each Kubernetes object generated.
+extraLabels: {}
+
+# Specify Kong's Docker image and repository details here
+image:
+  repository: kong
+  tag: "3.9"
+  # Kong Enterprise
+  # repository: kong/kong-gateway
+  # tag: "3.9"
+
+  # Specify a semver version if your image tag is not one (e.g. "nightly")
+  effectiveSemver:
+  pullPolicy: IfNotPresent
+  ## Optionally specify an array of imagePullSecrets.
+  ## Secrets must be manually created in the namespace.
+  ## ref: https://kubernetes.io/docs/tasks/configure-pod-container/pull-image-private-registry/
+  ##
+  # pullSecrets:
+  #   - myRegistrKeySecretName
+
+# This listen is internal-only. It cannot be exposed through a service or ingress.
+status:
+  enabled: true
+  http:
+    # Enable plaintext HTTP listen for the status listen
+    enabled: true
+    containerPort: 8100
+    parameters: []
+
+  tls:
+    # Enable HTTPS listen for the status listen
+    # Kong versions prior to 2.1 do not support TLS status listens.
+    # This setting must remain false on those versions
+    enabled: false
+    containerPort: 8543
+    parameters: []
+
+serviceMonitor:
+  enabled: true
+
+# readinessProbe for Kong pods
+readinessProbe:
+  httpGet:
+    path: "/status/ready"
+    port: status
+    scheme: HTTP
+  initialDelaySeconds: 5
+  timeoutSeconds: 5
+  periodSeconds: 10
+  successThreshold: 1
+  failureThreshold: 3
+
+# livenessProbe for Kong pods
+livenessProbe:
+  httpGet:
+    path: "/status"
+    port: status
+    scheme: HTTP
+  initialDelaySeconds: 5
+  timeoutSeconds: 5
+  periodSeconds: 10
+  successThreshold: 1
+  failureThreshold: 3
+
+admin:
+  # Enable creating a Kubernetes service for the admin API
+  # Disabling this is recommended for most ingress controller configurations
+  # Enterprise users that wish to use Kong Manager with the controller should enable this
+  enabled: true
+  type: NodePort
+  loadBalancerClass:
+  # To specify annotations or labels for the admin service, add them to the respective
+  # "annotations" or "labels" dictionaries below.
+  annotations: {}
+  #  service.beta.kubernetes.io/aws-load-balancer-proxy-protocol: "*"
+  labels: {}
+
+  http:
+    # Enable plaintext HTTP listen for the admin API
+    # Disabling this and using a TLS listen only is recommended for most configuration
+    enabled: false
+    servicePort: 8001
+    containerPort: 8001
+    # Set a nodePort which is available if service type is NodePort
+    # nodePort: 32080
+    # Additional listen parameters, e.g. "reuseport", "backlog=16384"
+    parameters: []
+
+  tls:
+    # Enable HTTPS listen for the admin API
+    enabled: true
+    servicePort: 8444
+    containerPort: 8444
+    # Set a target port for the TLS port in the admin API service, useful when using TLS
+    # termination on an ELB.
+    # overrideServiceTargetPort: 8000
+    # Set a nodePort which is available if service type is NodePort
+    # nodePort: 32443
+    # Additional listen parameters, e.g. "reuseport", "backlog=16384"
+    parameters:
+      - http2
+
+    # Specify the CA certificate to use for mTLS verification of the Admin API client by:
+    # - secretName - the secret must contain a key named "tls.crt" with the PEM-encoded certificate.
+    # - caBundle (PEM-encoded certificate string).
+    # If both are set, caBundle takes precedence.
+    client:
+      caBundle: ""
+      secretName: "{{ gateway.namespace }}-ca-bundle"
+  
+  {% set http_listeners = gateway.listeners | selectattr('protocol', 'equalto', 'HTTP') | list %}
+  {% set https_listeners = gateway.listeners | selectattr('protocol', 'equalto', 'HTTPS') | list %}
+  {% set tcp_listeners = gateway.listeners | selectattr('protocol', 'in', ['TLS','TCP']) | list %}
+  {% set udp_listeners = gateway.listeners | selectattr('protocol', 'equalto', 'UDP') | list %}
+# Specify Kong proxy service configuration
+proxy:
+  # Enable creating a Kubernetes service for the proxy
+  enabled: true
+  type: LoadBalancer
+  loadBalancerClass: io.cilium/bgp-control-plane
+  # Configures optional firewall rules and in the VPC network to only allow certain source ranges.
+  loadBalancerSourceRanges: []
+  # Override proxy Service name
+  nameOverride: ""
+  # To specify annotations or labels for the proxy service, add them to the respective
+  # "annotations" or "labels" dictionaries below.
+  annotations:
+    "io.cilium/lb-ipam-ips": {{ gateway.external_ip }}
+  # If terminating TLS at the ELB, the following annotations can be used
+  # "service.beta.kubernetes.io/aws-load-balancer-backend-protocol": "*",
+  # "service.beta.kubernetes.io/aws-load-balancer-cross-zone-load-balancing-enabled": "true",
+  # "service.beta.kubernetes.io/aws-load-balancer-ssl-cert": "arn:aws:acm:REGION:ACCOUNT:certificate/XXXXXX-XXXXXXX-XXXXXXX-XXXXXXXX",
+  # "service.beta.kubernetes.io/aws-load-balancer-ssl-ports": "kong-proxy-tls",
+  # "service.beta.kubernetes.io/aws-load-balancer-type": "elb"
+  labels:
+    enable-metrics: "true"
+    external-ip-pool: "lan-1"
+  
+  http:
+  {% if http_listeners or tcp_listeners %}
+enabled: true
+# Use the port from the first HTTP listener found
+servicePort: {{ http_listeners[0].port if http_listeners else 80 }}
+containerPort: 8000
+parameters: []
+  {% else %}
+enabled: false
+  {% endif %}
+
+tls:
+  {% if https_listeners %}
+enabled: true
+servicePort: {{ https_listeners[0].port }}
+containerPort: 8443
+parameters:
+  - http2
+appProtocol: ""
+  {% else %}
+enabled: false
+  {% endif %}
+
+# Define stream (TCP) listen
+stream:
+  {% if tcp_listeners %}
+  {% for listener in tcp_listeners %}
+- containerPort: {{ listener.port }}
+  servicePort: {{ listener.port }}
+  protocol: TCP
+  {% if listener.protocol == 'TLS' %}
+parameters:
+  - ssl
+  {% endif %}
+  {% endfor %}
+  {% endif %}
+
+# Specify Kong UDP proxy service configuration
+udpProxy:
+  {% if udp_listeners %}
+# Enable creating a Kubernetes service for UDP proxying
+enabled: true
+type: LoadBalancer
+loadBalancerClass: io.cilium/bgp-control-plane
+# To specify annotations or labels for the proxy service, add them to the respective
+# "annotations" or "labels" dictionaries below.
+annotations: {}
+#  service.beta.kubernetes.io/aws-load-balancer-proxy-protocol: "*"
+labels:
+  external-ip-pool: "lan-1"
+# Optionally specify a static load balancer IP.
+# loadBalancerIP:
+
+# Define stream (UDP) listen
+stream:
+  {% for listener in udp_listeners %}
+- containerPort: {{ listener.port }}
+  servicePort: {{ listener.port }}
+  protocol: UDP
+  {% endfor %}
+  {% else %}
+enabled: false
+  {% endif %}
+
+migrations:
+  preUpgrade: false
+  postUpgrade: false
+
+cluster:
+  enabled: false
+
+ingressController:
+  enabled: false
+
+postgresql:
+  enabled: false
+
+certificates:
+  enabled: false
+
+enterprise:
+  enabled: false
+
+manager:
+  enabled: false
+
+portal:
+  enabled: false
+
+portalapi:
+  enabled: false
+
+clustertelemetry:
+  enabled: false

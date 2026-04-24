@@ -1,0 +1,51 @@
+- name: Check connectivity via specific interface
+  ansible.builtin.raw: |
+    curl --interface em2 -I -s -m 5 http://google.com
+  register: connectivity_check
+  ignore_errors: yes
+  changed_when: false
+  delegate_to: "{{ inventory_hostname }}"
+  become: no
+
+- name: Run network setup if connectivity check fails
+  block:
+    - name: Run network setup script
+      shell: ../scripts/network_setup.sh
+      register: network_setup
+      changed_when: false
+      delegate_to: localhost
+      become: no
+      vars:
+        ansible_python_interpreter: /usr/bin/python
+
+    - name: Show generated IP
+      debug:
+        msg: "Generated IP: {{ network_setup.stdout }}"
+
+    - name: Configure network interface
+      ansible.builtin.command: ifconfig em2 {{ target_ip }} netmask {{ host_netmask }} up
+      delegate_to: "{{ inventory_hostname }}"
+
+    - name: Persist network configuration
+      ansible.builtin.command: echo "inet {{ target_ip }} netmask {{ host_netmask }}" > /etc/hostname.em2
+      delegate_to: "{{ inventory_hostname }}"
+      
+    - name: Ensure tls-san block is present in RKE2 config
+      ansible.builtin.blockinfile:
+        path: ../ressources/rke2/config.yaml
+        create: no
+        block: |
+          tls-san:
+            - "{{ network_setup.stdout }}"
+      delegate_to: localhost  
+      become: no
+      
+#    - name: Ensure IP.2 block is present in pki csr.conf
+#      ansible.builtin.blockinfile:
+#        path: ../ressources/pki/csr.conf
+#        create: no
+#        block: |
+#          IP.2 = {{ network_setup.stdout }}
+#      delegate_to: localhost
+#      become: no
+  when: connectivity_check.rc != 0

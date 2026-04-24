@@ -1,0 +1,55 @@
+- name: Check if helm is already installed
+  stat:
+    path: /usr/local/bin/helm
+  register: helm_installed
+
+- name: Download Helm install script
+  get_url:
+    url: https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3
+    dest: /tmp/get_helm.sh
+    mode: '0700'
+
+- name: Execute Helm install script
+  command: /tmp/get_helm.sh
+  ignore_errors: true
+  retries: 10
+  delay: 10
+
+- name: Clean up installation script
+  file:
+    path: /tmp/get_helm.sh
+    state: absent
+  when: not helm_installed.stat.exists
+
+- name: Verify Helm installation
+  shell: helm version --short
+  environment:
+    PATH: "/usr/local/bin:{{ ansible_env.PATH }}"
+  register: helm_version_output
+  changed_when: false
+
+- name: Display Helm version
+  debug:
+    var: helm_version_output.stdout
+
+- name: Initialize Helm repositories
+  shell: |
+    helm repo add stable https://charts.helm.sh/stable
+    helm repo update
+  environment:
+    PATH: "/usr/local/bin:{{ ansible_env.PATH }}"
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  when: not helm_installed.stat.exists
+  register: helm_repo_init
+  changed_when: "'already exists' not in helm_repo_init.stderr"
+  retries: 10
+  delay: 10
+
+- name: Ensure /usr/bin/helm points to /usr/local/bin/helm
+  file:
+    src: /usr/local/bin/helm
+    dest: /usr/bin/helm
+    state: link
+    force: yes
+  become: true
+  run_once: true

@@ -1,0 +1,46 @@
+- name: Create keycloak namespace
+  kubernetes.core.k8s:
+    name: keycloak
+    api_version: v1
+    kind: Namespace
+    state: present
+
+- name: Add Bitnami Helm repository
+  kubernetes.core.helm_repository:
+    name: bitnami
+    repo_url: https://charts.bitnami.com/bitnami
+
+- name: Update Helm repositories
+  shell: helm repo update
+  changed_when: false
+
+- name: Copy keycloak value files
+  ansible.builtin.copy:
+    src: "../ressources/k8s/keycloak/"
+    dest: "/root/.kube/ressources/keycloak/"
+    mode: '0644'
+    backup: yes
+
+- name: Check if keycloak is already installed
+  shell: helm list -n keycloak --output json
+  register: keycloak_installed
+  changed_when: false
+  failed_when: false
+
+- name: Install Keycloak from Bitnami
+  kubernetes.core.helm:
+    name: keycloak
+    chart_ref: bitnami/keycloak
+    namespace: keycloak
+    create_namespace: true
+    values_files:
+      - /root/.kube/ressources/keycloak/helm/keycloak-default-values.yml
+
+
+- name: Apply all keycloak resources from directory
+  shell: kubectl apply -f /root/.kube/ressources/keycloak/ 
+  register: kubectl_apply_result
+  changed_when: "'configured' in kubectl_apply_result.stdout or 'created' in kubectl_apply_result.stdout"
+  failed_when:  
+    - kubectl_apply_result.rc != 0
+    - "'no objects passed to apply' not in kubectl_apply_result.stderr"

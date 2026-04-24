@@ -1,0 +1,19 @@
+- name: Copy bytebase value files
+  ansible.builtin.copy:
+    src: "../ressources/k8s/bytebase/"
+    dest: "/root/.kube/ressources/bytebase/"
+    mode: '0644'
+    backup: yes
+    
+- name: Create bytebase namespace
+  kubernetes.core.k8s:
+    name: bytebase
+    api_version: v1
+    kind: Namespace
+    state: present
+    
+- name: Apply the kubernetes bytebase manifest
+  kubernetes.core.k8s:
+    state: present
+    src: /root/.kube/ressources/bytebase/bytebase.yml
+  delegate_to: masternode

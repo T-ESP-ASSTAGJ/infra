@@ -1,0 +1,19 @@
+- hosts: all
+  become: yes
+  
+  environment:
+    KUBECONFIG: /etc/rancher/rke2/rke2.yaml
+    
+  vars:
+    timezone: "Europe/Paris"
+    ntp_servers:
+      - "2.fr.pool.ntp.org"
+      - "2.europe.pool.ntp.org"
+      - "pool.ntp.org"
+
+  tasks:
+    - name: Install linux utils
+      include_tasks: ../tasks/install_linux_utils.yml
+
+    - name: Install Kubernetes RKE2
+      include_tasks: ../tasks/setup_rke2_worker.yml

@@ -1,0 +1,37 @@
+- name: Add hashicorp vault Helm repository
+  kubernetes.core.helm_repository:
+    name: hashicorp
+    repo_url: https://helm.releases.hashicorp.com
+  retries: 10
+  delay: 10
+
+- name: Update Helm repositories
+  shell: helm repo update 
+  changed_when: false
+
+- name: Create working directory for vault
+  ansible.builtin.file:
+    path: /root/.kube/ressources/vault
+    state: directory
+    mode: '0700'
+  
+- name: Copy vault value files
+  ansible.builtin.copy:
+    src: "../ressources/k8s/vault/helm/vault-default-values.yml"
+    dest: "/root/.kube/ressources/vault/vault-default-values.yml"
+    mode: '0644'
+    backup: yes
+
+- name: Install vault agent using Helm
+  kubernetes.core.helm:
+    name: vault
+    chart_ref: hashicorp/vault
+    release_namespace: vault
+    state: present
+    create_namespace: yes
+    values_files:
+      - /root/.kube/ressources/vault/vault-default-values.yml
+  environment:
+    KUBECONFIG: /etc/rancher/rke2/rke2.yaml
+
+

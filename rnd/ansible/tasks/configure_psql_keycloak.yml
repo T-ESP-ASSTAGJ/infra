@@ -1,0 +1,30 @@
+---
+- name: Create keycloak database
+  shell: |
+    sudo -u postgres createdb {{ kc_db_name }} --encoding=UTF8 --locale=C --template=template0
+  register: kc_db_create
+  changed_when: true
+  ignore_errors: yes
+
+- name: Create keycloak database user
+  shell: |
+    sudo -u postgres psql -c "
+    CREATE USER {{ kc_db_user }} WITH PASSWORD '{{ kc_db_password }}';
+    GRANT ALL PRIVILEGES ON DATABASE {{ kc_db_name }} TO {{ kc_db_user }};
+    ALTER USER {{ kc_db_user }} CREATEDB;
+    "
+  register: kc_user_create
+  changed_when: true
+  ignore_errors: yes
+
+- name: Grant additional privileges to keycloak user
+  shell: |
+    sudo -u postgres psql {{ kc_db_name }} -c "
+    GRANT ALL ON SCHEMA public TO {{ kc_db_user }};
+    GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO {{ kc_db_user }};
+    GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO {{ kc_db_user }};
+    ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO {{ kc_db_user }};
+    ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO {{ kc_db_user }};
+    "
+  register: kc_privileges
+  changed_when: true

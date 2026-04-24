@@ -1,0 +1,182 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ database.namespace }}
+
+---
+
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ database.name }}-superuser-creds
+  namespace: {{ database.namespace }}
+type: kubernetes.io/basic-auth
+stringData:
+  username: postgres
+  password: "{{ pg_superuser_password }}"
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: cloudflare
+  namespace: {{ database.namespace }}
+type: Opaque
+stringData:
+  access_key_id: "{{ backup_s3_access_key_id | default('replace-me') }}"
+  secret_access_key: "{{ backup_s3_secret_access_key | default('replace-me') }}"
+
+---
+
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: {{ database.name }}-database-cluster
+  namespace: {{ database.namespace }}
+spec:
+  logLevel: trace
+{% if database.custom_image is defined and database.custom_image %}
+  imageName: {{ database.custom_image }}
+{% endif %}
+  instances: {{ database.replicas }}
+  postgresql:
+    parameters:
+      "pgaudit.log": "all, -misc"
+      "pgaudit.log_catalog": "on"
+      "pgaudit.log_parameter": "on"
+      "pgaudit.log_relation": "on"
+      
+  enableSuperuserAccess: true
+  superuserSecret:
+    name: {{ database.name }}-superuser-creds 
+
+  bootstrap:
+{% if database.restore_from_backup == true %}
+    recovery:
+      source: "backup-source-to-restore-from"
+
+{% if database.postInitApplicationSQL %}
+      postInitApplicationSQL:
+{% for query in database.postInitApplicationSQL %}
+      - {{ query }}
+{% endfor %}
+{% endif %}
+
+{% else %}
+    initdb:
+      database: {{ database.name }}
+      owner: {{ database.name }}-user
+      dataChecksums: true
+      encoding: 'UTF8'
+
+{% if database.postInitApplicationSQL %}
+      postInitApplicationSQL:
+{% for query in database.postInitApplicationSQL %}
+      - {{ query }}
+{% endfor %}
+{% endif %}
+{% endif %}
+  
+  backup:
+    barmanObjectStore:
+      destinationPath: "s3://{{ s3_bucket_name }}/"
+      endpointURL: "{{ s3_endpoint_url }}"
+      serverName: "cluster-{{ new_backup_timestamp }}"
+      s3Credentials:
+        accessKeyId:
+          name: cloudflare
+          key: access_key_id
+        secretAccessKey:
+          name: cloudflare
+          key: secret_access_key
+      
+      wal:
+        compression: gzip
+        encryption: AES256
+      
+      data:
+        compression: gzip
+        encryption: AES256
+  
+    retentionPolicy: "30d"
+  
+    schedule:
+      - name: hourly-base-backup
+        schedule: "0 * * * *"
+        target: prefer-standby
+  
+  externalClusters:
+    - name: "backup-source-to-restore-from"
+      barmanObjectStore:
+        destinationPath: "s3://{{ s3_bucket_name }}/"
+        serverName: "{{ latest_backup_result.stdout }}"
+        endpointURL: "{{ s3_endpoint_url }}"
+        s3Credentials:
+          accessKeyId:
+            name: cloudflare
+            key: access_key_id
+          secretAccessKey:
+            name: cloudflare
+            key: secret_access_key
+  storage:
+    size: 1Gi
+  monitoring:
+    enablePodMonitor: true
+  certificates:
+    serverTLSSecret: {{ database.tls_secret_name }}
+    serverCASecret: {{ database.tls_secret_name }}
+    
+---
+
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: {{ database.name }}-declarative-db
+  namespace: {{ database.namespace }}
+spec:
+  cluster:
+    name: {{ database.name }}-database-cluster
+  name: {{ database.name }}
+  owner: "{{ database.name }}-user"
+{% if database.extensions is defined and database.extensions %}
+  schemas:
+    - name: "extensions"
+      owner: "{{ database.name }}-user"
+  extensions:
+{% for extension in database.extensions %}
+    - name: "{{ extension }}"
+      schema: "extensions"
+{% endfor %}
+{% endif %}
+    
+---
+
+apiVersion: postgresql.cnpg.io/v1
+kind: Pooler
+metadata:
+  name: pooler-{{ database.name }}-rw
+  namespace: {{ database.namespace }}
+spec:
+  cluster:
+    name: {{ database.name }}-database-cluster
+  instances: {{ database.replicas }}
+  type: rw
+  pgbouncer:
+    poolMode: session
+    parameters:
+      max_client_conn: "1000"
+      default_pool_size: "10"
+      
+---
+
+apiVersion: postgresql.cnpg.io/v1
+kind: ScheduledBackup
+metadata:
+  name: {{ database.name }}-backup
+  namespace: {{ database.namespace }}
+spec:
+  schedule: "0 * * * *"  
+  backupOwnerReference: self
+  cluster:
+    name: {{ database.name }}-database-cluster
+     

@@ -1,0 +1,125 @@
+- name: Check if Vault server certificate already exists
+  ansible.builtin.stat:
+    path: "{{ vault_tls_dir }}/vault-server.crt"
+  register: vault_cert_check
+
+- name: Get Vault server certificate info if it exists
+  community.crypto.x509_certificate_info:
+    path: "{{ vault_tls_dir }}/vault-server.crt"
+  register: vault_cert_info
+  when: vault_cert_check.stat.exists
+
+- name: "Generate and deploy Vault TLS certificates if they are missing or expired"
+  block:
+    - name: Ensure community.crypto collection is available
+      ansible.builtin.fail:
+        msg: "The community.crypto collection is required. Please install it with: ansible-galaxy collection install community.crypto"
+      when: not lookup('community.general.collection_version', 'community.crypto')
+
+    - name: Create temporary working directory for certs
+      ansible.builtin.file:
+        path: "{{ cert_work_dir }}"
+        state: directory
+        mode: '0700'
+
+    - name: "Step 1a: Create the CA private key"
+      community.crypto.openssl_privatekey:
+        path: "{{ ca_key_path }}"
+        size: 2048
+        mode: '0600'
+
+    - name: "Step 1b: Create a CSR for the CA"
+      community.crypto.openssl_csr:
+        path: "{{ ca_csr_path }}"
+        privatekey_path: "{{ ca_key_path }}"
+        subject: "{{ ca_subj }}"
+        basic_constraints:
+          - "CA:TRUE"
+          - "pathlen:0"
+        basic_constraints_critical: true
+        key_usage:
+          - keyCertSign
+        key_usage_critical: true
+        mode: '0644'
+
+    - name: "Step 1c: Create the self-signed CA certificate from its CSR"
+      community.crypto.x509_certificate:
+        path: "{{ ca_cert_path }}"
+        csr_path: "{{ ca_csr_path }}"
+        privatekey_path: "{{ ca_key_path }}"
+        provider: selfsigned
+        selfsigned_not_after: "+3650d"
+        mode: '0644'
+
+    - name: "Step 2: Create the Vault server private key"
+      community.crypto.openssl_privatekey:
+        path: "{{ server_key_path }}"
+        size: 2048
+        mode: '0600'
+
+    - name: "Step 3: Create the Vault server CSR"
+      community.crypto.openssl_csr:
+        path: "{{ server_csr_path }}"
+        privatekey_path: "{{ server_key_path }}"
+        subject: "{{ server_subj }}"
+        subject_alt_name: "{{ server_sans }}"
+        mode: '0644'
+
+    - name: "Step 4: Sign the server CSR with the CA"
+      community.crypto.x509_certificate:
+        path: "{{ server_cert_path }}"
+        csr_path: "{{ server_csr_path }}"
+        provider: ownca
+        ownca_path: "{{ ca_cert_path }}"
+        ownca_privatekey_path: "{{ ca_key_path }}"
+        ownca_not_after: "+365d" # 1 year from now
+        mode: '0644'
+
+    - name: "Step 5: Deploy Vault TLS files"
+      block:
+        - name: Ensure destination directory /opt/vault/tls exists
+          ansible.builtin.file:
+            path: "{{ vault_tls_dir }}"
+            state: directory
+            owner: vault
+            group: vault
+            mode: '0750'
+
+        - name: Copy Vault server certificate
+          ansible.builtin.copy:
+            src: "{{ server_cert_path }}"
+            dest: "{{ vault_tls_dir }}/vault-server.crt"
+            remote_src: true
+            owner: vault
+            group: vault
+            mode: '0640'
+
+        - name: Copy Vault server key
+          ansible.builtin.copy:
+            src: "{{ server_key_path }}"
+            dest: "{{ vault_tls_dir }}/vault-server.key"
+            remote_src: true
+            owner: vault
+            group: vault
+            mode: '0640'
+
+        - name: Copy Vault CA
+          ansible.builtin.copy:
+            src: "{{ ca_cert_path }}"
+            dest: "{{ vault_tls_dir }}/vault-ca.crt"
+            remote_src: true
+            owner: vault
+            group: vault
+            mode: '0640'
+
+    - name: Clean up temporary working directory
+      ansible.builtin.file:
+        path: "{{ cert_work_dir }}"
+        state: absent
+      when: true
+  when: not vault_cert_check.stat.exists or (vault_cert_info.expired is defined and vault_cert_info.expired)
+
+- name: Copy the hcl config file
+  ansible.builtin.copy:
+    src: ../ressources/pki/vault.hcl
+    dest: /etc/vault.d/

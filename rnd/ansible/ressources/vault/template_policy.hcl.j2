@@ -1,0 +1,47 @@
+# Policy for {{ current_app.name }}
+{% for perm in current_app.permissions %}
+
+{% set secret_list = secret_definitions | selectattr('name', 'equalto', perm.secret) | list %}
+
+{% if secret_list %}
+  {# Get the first (and only) matching secret #}
+  {% set secret = secret_list[0] %}
+
+  {# --- KV Secret 'read' Permissions --- #}
+  {% if secret.type == 'kv' and perm.access == 'read' %}
+  # Grant read access to the KV secret at its full path
+  path "{{ secret_base_path }}/secrets/{{ secret.name }}" {
+    capabilities = ["read"]
+  }
+  {% endif %}
+
+  {# --- Transit 'sign' Permissions --- #}
+  {% if secret.type == 'transit' and perm.access == 'sign' %}
+  # Grant sign permissions using the key
+  path "{{ secret_base_path }}-transit-{{ secret.name }}/sign/{{ secret.name }}" {
+    capabilities = ["update"]
+  }
+  {% endif %}
+
+  {# --- Transit 'verify' (JWKS) Permissions --- #}
+  {% if secret.type == 'transit' and perm.access == 'verify' %}
+  # Grant read access to the public JWKS endpoint
+  path "{{ secret_base_path }}-transit-{{ secret.name }}/jwks/{{ secret.name }}" {
+    capabilities = ["read"]
+  }
+  # Grant read access to the key configuration (for alg, etc.)
+  path "{{ secret_base_path }}-transit-{{ secret.name }}/keys/{{ secret.name }}" {
+    capabilities = ["read"]
+  }
+  {% endif %}
+
+  {# --- Database 'read' (dynamic creds) Permissions --- #}
+  {% if secret.type == 'database' and perm.access == 'read' %}
+  # Grant read access to a specific dynamic credentials role
+  path "{{ secret_base_path }}-database-{{ secret.name }}/creds/{{ perm.role | default(secret.name ~ '-readwrite-role') }}" {
+    capabilities = ["read"]
+  }
+  {% endif %}
+
+{% endif %}
+{% endfor %}

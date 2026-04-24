@@ -1,0 +1,56 @@
+- name: Check if the root CA secrets engine exists
+  ansible.builtin.shell:
+    cmd: "vault secrets list -tls-skip-verify | grep -q platform_internal_root_ca/"
+  register: root_ca_check
+  changed_when: false
+  failed_when: false
+  
+- name: Enable the root CA pki
+  ansible.builtin.command: vault secrets enable -tls-skip-verify -path=platform_internal_root_ca pki
+  when: root_ca_check.rc != 0
+  
+- name: Tune CA max lease
+  ansible.builtin.command: vault secrets tune -tls-skip-verify -max-lease-ttl=87600h platform_internal_root_ca
+  when: root_ca_check.rc != 0
+  
+- name: Generate the root CA and capture certificate
+  ansible.builtin.command:
+    cmd: >
+      vault write -tls-skip-verify -field=certificate
+      platform_internal_root_ca/root/generate/internal
+      common_name="Platform internal root CA"
+      issuer_name="platform-internal"
+      ttl=87600h
+  register: root_ca_cert
+  when: root_ca_check.rc != 0
+  changed_when: true
+
+- name: Save the root CA certificate to a file
+  ansible.builtin.copy:
+    content: "{{ root_ca_cert.stdout }}"
+    dest: root_platform_ca.crt
+  when: root_ca_cert.changed
+  
+- name: Get the Root CA Issuer ID
+  ansible.builtin.shell:
+    cmd: "vault list -format=json -tls-skip-verify platform_internal_root_ca/issuers/ | jq -r '.[0]'"
+  register: issuer_id_result
+  when: root_ca_check.rc != 0
+
+- name: Set issuer_id fact
+  ansible.builtin.set_fact:
+    issuer_id: "{{ issuer_id_result.stdout }}"
+  when: root_ca_check.rc != 0
+
+- name: Debug the captured issuer ID
+  ansible.builtin.debug:
+    var: issuer_id
+  when: root_ca_check.rc != 0
+  
+- name: Set CA and CRL urls
+  ansible.builtin.shell:
+    cmd: >
+      vault write -tls-skip-verify platform_internal_root_ca/config/urls
+      issuing_certificates="$VAULT_ADDR/v1/platform_internal_root_ca/ca"
+      crl_distribution_points="$VAULT_ADDR/v1/platform_internal_root_ca/crl"
+  when: root_ca_check.rc != 0

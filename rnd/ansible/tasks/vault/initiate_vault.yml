@@ -1,0 +1,27 @@
+- name: Start and enable vault service
+  ansible.builtin.service:
+    name: vault
+    state: restarted
+    enabled: yes
+  when: vault_install_status.changed
+
+- name: Check if keys file already exists locally
+  ansible.builtin.stat:
+    path: "./vault_keys_{{ inventory_hostname }}.txt"
+  register: key_file_status
+  delegate_to: localhost
+  become: false
+
+- name: Initialize Vault if keys file doesn't exist
+  ansible.builtin.command: vault operator init -tls-skip-verify
+  register: vault_init_result
+  when: not key_file_status.stat.exists
+  changed_when: true
+
+- name: Save new initialization keys to a local file
+  ansible.builtin.copy:
+    content: "{{ vault_init_result.stdout }}"
+    dest: "./vault_keys_{{ inventory_hostname }}.txt"
+  when: vault_init_result.changed
+  delegate_to: localhost
+  become: false

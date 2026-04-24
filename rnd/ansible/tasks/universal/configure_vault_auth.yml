@@ -1,0 +1,121 @@
+- name: Read Vault keys file from local machine
+  delegate_to: localhost
+  ansible.builtin.slurp:
+    src: "./vault_keys_{{ server.hostname }}.txt"
+  register: vault_keys_file
+  become: false
+
+- name: Extract Root Token using shell
+  delegate_to: localhost
+  ansible.builtin.shell:
+    cmd: "echo \"{{ vault_keys_file['content'] | b64decode }}\" | grep 'Initial Root Token' | awk '{print $4}'"
+  register: temp_token_result
+  changed_when: false
+  become: false
+  
+- name: "Set a dynamic fact for the token of {{ server.hostname }}"
+  ansible.builtin.set_fact:
+    "{{ server.hostname }}_token": "{{ temp_token_result.stdout }}"
+  no_log: false
+
+- name: Read enabled auth methods from Vault
+  community.hashi_vault.vault_read:
+    url: "{{ server.vault_address }}"
+    validate_certs: false
+    path: sys/auth
+  register: enabled_auth_methods
+  delegate_to: "{{ server.hostname }}"
+
+- name: Ensure the vault-auth-reviewer Service Account exists
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: ServiceAccount
+      metadata:
+        name: vault-auth-reviewer
+        namespace: default
+  delegate_to: masternode
+
+- name: Create a ClusterRole for token review permissions
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: rbac.authorization.k8s.io/v1
+      kind: ClusterRole
+      metadata:
+        name: vault-token-reviewer
+      rules:
+        - apiGroups: ["authentication.k8s.io"]
+          resources: ["tokenreviews"]
+          verbs: ["create"]
+  delegate_to: masternode
+
+- name: Bind the ClusterRole to the vault-auth-reviewer Service Account
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: rbac.authorization.k8s.io/v1
+      kind: ClusterRoleBinding
+      metadata:
+        name: vault-token-reviewer-binding
+      roleRef:
+        apiGroup: rbac.authorization.k8s.io
+        kind: ClusterRole
+        name: vault-token-reviewer
+      subjects:
+        - kind: ServiceAccount
+          name: vault-auth-reviewer
+          namespace: default
+  delegate_to: masternode
+
+- name: Generate a token for the token reviewer Account (Modern Method)
+  ansible.builtin.command:
+    cmd: "kubectl create token vault-auth-reviewer --namespace default --duration=8760h"
+  register: sa_token_result
+  changed_when: false
+  delegate_to: masternode
+
+- name: Set the auth reviewer token in memory
+  ansible.builtin.set_fact:
+    AUTH_REVIEWER_TOKEN: "{{ sa_token_result.stdout }}"
+  no_log: true
+  delegate_to: masternode
+
+- name: Register rke2 ca certificate
+  ansible.builtin.shell:
+    cmd: kubectl config view --raw --minify --flatten --output='jsonpath={.clusters[].cluster.certificate-authority-data}' | base64 --decode
+  register: rke2_ca
+  delegate_to: masternode
+
+- name: Set the ca certificate in memory
+  ansible.builtin.set_fact:
+    RKE2_CA: "{{ rke2_ca.stdout }}"
+  no_log: true
+  delegate_to: masternode
+
+- name: Enable kubernetes auth method
+  community.hashi_vault.vault_write:
+    token: "{{ vars[server.hostname ~ '_token'] }}"
+    url: "{{ server.vault_address }}"
+    validate_certs: false
+    path: "sys/auth/kubernetes"
+    data:
+      type: "kubernetes"
+  when: "'kubernetes/' not in enabled_auth_methods.data.data"
+  delegate_to: "{{ server.hostname }}"
+  
+- name: Configure kubernetes auth
+  community.hashi_vault.vault_write:
+    token: "{{ vars[server.hostname ~ '_token'] }}"
+    url: "{{ server.vault_address }}"
+    validate_certs: false
+    path: "auth/kubernetes/config"
+    data:
+      token_reviewer_jwt: "{{ AUTH_REVIEWER_TOKEN }}"
+      kubernetes_host: "{{ kube_api_url }}"
+      kubernetes_ca_cert: "{{ RKE2_CA }}"
+      issuer: "{{ kube_issuer }}"
+  delegate_to: "{{ server.hostname }}"
+  no_log: false 
+

@@ -1,0 +1,14 @@
+apiVersion: cilium.io/v2
+kind: CiliumBGPClusterConfig
+metadata:
+  name: cilium-bgp
+spec:
+  bgpInstances:
+    - name: "instance-65000"
+      localASN: 65000
+      peers:
+        - name: "openbsd-router"
+          peerASN: 65001
+          peerAddress: 192.168.10.1
+          peerConfigRef:
+            name: "default-peer-config"
