@@ -20,7 +20,7 @@ grafana:
 
   additionalDataSources:
     - name: Quickwit
-      type: quickwit-datasource
+      type: quickwit-quickwit-datasource
       url: http://quickwit-searcher.monitoring.svc.cluster.local:7280
       access: proxy
       isDefault: false
