@@ -1,0 +1,36 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: jamly-api-migrations
+  namespace: jamly-api
+  annotations:
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  backoffLimit: 1
+  ttlSecondsAfterFinished: 3600
+  template:
+    metadata:
+      labels:
+        app: jamly-api
+        job: migrations
+    spec:
+      restartPolicy: Never
+      nodeSelector:
+        node-role.kubernetes.io/worker: ""
+      containers:
+      - name: migrations
+        image: ghcr.io/t-esp-asstagj/api:staging
+        imagePullPolicy: Always
+        command: ["php"]
+        args:
+          - bin/console
+          - doctrine:migrations:migrate
+          - --no-interaction
+          - --allow-no-migration
+        env:
+        - name: APP_ENV
+          value: "staging"
+        envFrom:
+        - secretRef:
+            name: jamly-api-secrets
