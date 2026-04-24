@@ -24,6 +24,10 @@ spec:
         env:
         - name: APP_ENV
           value: "staging"
+        - name: REDIS_URL
+          value: "redis://redis.jamly-api.svc.cluster.local:6379"
+        - name: MERCURE_PUBLIC_URL
+          value: "https://api.jamly.eu/.well-known/mercure"
         envFrom:
         - secretRef:
             name: jamly-api-secrets
