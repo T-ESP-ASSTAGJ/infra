@@ -1,0 +1,41 @@
+- name: Create TLS directory for Vault
+  ansible.builtin.file:
+    path: /opt/vault/tls
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Copy FULL CHAIN server certificate to file with secure permissions
+  ansible.builtin.copy:
+    content: "{{ (vault_cert_response.stdout | from_json).data.certificate }}\n{{ (vault_cert_response.stdout | from_json).data.issuing_ca }}"
+    dest: /opt/vault/tls/tls.crt
+    owner: vault
+    group: vault
+    mode: '0644'
+
+- name: Copy root CA to client trust store for mTLS
+  ansible.builtin.copy:
+    content: "{{ (vault_cert_response.stdout | from_json).data.ca_chain[1] }}"
+    dest: /opt/vault/tls/root_ca.crt
+    owner: vault
+    group: vault
+    mode: '0644'
+
+- name: Copy private key to file with highly restricted permissions
+  ansible.builtin.copy:
+    content: "{{ (vault_cert_response.stdout | from_json).data.private_key }}"
+    dest: /opt/vault/tls/tls.key
+    owner: vault
+    group: vault
+    mode: '0600'
+    
+- name: Copy the hcl config file 
+  ansible.builtin.copy:
+    src: ../ressources/vault/vault.hcl
+    dest: /etc/vault.d/
+    
+- name: Restart the vault server
+  ansible.builtin.service:
+    name: vault
+    state: restarted

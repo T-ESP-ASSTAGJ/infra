@@ -1,0 +1,43 @@
+- name: Check if kubernetes auth is already enabled
+  ansible.builtin.command: vault auth list -tls-skip-verify -format=json
+  register: auth_list
+  changed_when: false
+
+- name: Enable kubernetes auth method IF NOT already enabled
+  ansible.builtin.command: vault auth enable -tls-skip-verify kubernetes
+  when: "'kubernetes/' not in auth_list.stdout"
+    
+- name: Configure kubernetes auth
+  ansible.builtin.command:
+    cmd: vault write -tls-skip-verify auth/kubernetes/config 
+      token_reviewer_jwt="{{ CERT_MANAGER_TOKEN }}" 
+      kubernetes_host="https://192.168.10.13:6443" 
+      kubernetes_ca_cert="{{ RKE2_CA }}" 
+      issuer="https://kubernetes.cert-manager.svc.cluster.local"
+  when: "'kubernetes/' not in auth_list.stdout"
+
+- name: "Step 1: Create Vault policy for vault-agent"
+  community.hashi_vault.vault_policy:
+    name: vault-agent-policy
+    rules: |
+      # Grant permission to retrieve secrets using the vault-agent role
+      path "kubernetes-secrets/data/vault-agent/config" {
+      capabilities = ["read"]
+      }
+    verify: false
+
+- name: "Step 2: Bind policy to Kubernetes auth role"
+  community.hashi_vault.vault_auth_role:
+    name: vault-agent
+    mount_point: kubernetes 
+    role_type: kubernetes
+    bound_service_account_names:
+      - vault-agent-sa
+    bound_service_account_namespaces:
+      - default
+    policies:
+      - cert-manager-policy
+    ttl: 24h
+    token_skew: 30s
+    verify: false
+      

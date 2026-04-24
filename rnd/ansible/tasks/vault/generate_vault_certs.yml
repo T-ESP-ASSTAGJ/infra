@@ -1,0 +1,25 @@
+- name: Create a role for the Vault
+  ansible.builtin.shell:
+    cmd: >
+      vault write -tls-skip-verify
+      platform_internal_intermediate_ca/roles/vault_certificates
+      issuer_ref="$(vault read -tls-skip-verify -field=default platform_internal_intermediate_ca/config/issuers)" 
+      allowed_domains="platform.local"
+      allow_subdomains=true
+      max_ttl="720h"
+  environment:
+    VAULT_ADDR: https://127.0.0.1:8200
+
+- name: Request a certificate
+  ansible.builtin.shell:
+    cmd: >
+      vault write -tls-skip-verify -format=json
+      platform_internal_intermediate_ca/issue/vault_certificates
+      common_name="vault.platform.local"
+      ip_sans="192.168.10.15"
+      ttl="24h"
+  environment:
+    VAULT_ADDR: https://127.0.0.1:8200
+  register: vault_cert_response
+
+      
