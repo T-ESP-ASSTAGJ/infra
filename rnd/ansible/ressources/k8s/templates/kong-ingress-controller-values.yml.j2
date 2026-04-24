@@ -1,0 +1,255 @@
+# -----------------------------------------------------------------------------
+# Ingress Controller parameters
+# -----------------------------------------------------------------------------
+secretVolumes:
+  - {{ gateway.cp_tls_secret_name }}
+# Kong Ingress Controller's primary purpose is to satisfy Ingress resources
+# created in k8s. It uses CRDs for more fine grained control over routing and
+# for Kong specific configuration.
+ingressController:
+  enabled: true
+  image:
+    repository: kong/kubernetes-ingress-controller
+    tag: "3.5"
+    # Optionally set a semantic version for version-gated features. This can normally
+    # be left unset. You only need to set this if your tag is not a semver string,
+    # such as when you are using a "next" tag. Set this to the effective semantic
+    # version of your tag: for example if using a "next" image for an unreleased 3.1.0
+    # version, set this to "3.1.0".
+    effectiveSemver:
+  args: []
+
+  gatewayDiscovery:
+    enabled: true
+    generateAdminApiService: false
+    adminApiService:
+      namespace: "{{ gateway.namespace }}"
+      name: "{{ gateway.namespace }}-gateway-kong-admin"
+
+  # Specify individual namespaces to watch for ingress configuration. By default,
+  # when no namespaces are set, the controller watches all namespaces and uses a
+  # ClusterRole to grant access to Kubernetes resources. When you list specific
+  # namespaces, the controller will watch those namespaces only and will create
+  # namespaced-scoped Roles for each of them. The controller will still use a
+  # ClusterRole for cluster-scoped resources.
+  # Requires controller 2.0.0 or newer.
+  watchNamespaces: ""
+
+  # Specify Kong Ingress Controller configuration via environment variables
+  env:
+    # The controller disables TLS verification by default because Kong
+    # generates self-signed certificates by default. Set this to false once you
+    # have installed CA-signed certificates.
+    # If using Kong Enterprise with RBAC enabled, uncomment the section below
+    # and specify the secret/key containing your admin token.
+    # kong_admin_token:
+    #   valueFrom:
+    #     secretKeyRef:
+    #        name: CHANGEME-admin-token-secret
+    #        key: CHANGEME-admin-token-key
+    log_level: debug
+    KONG_ADMIN_TLS_SKIP_VERIFY: "false"
+    KONG_ADMIN_TLS_CLIENT_CERT_FILE: "/etc/secrets/{{ gateway.cp_tls_secret_name }}/tls.crt"
+    KONG_ADMIN_TLS_CLIENT_KEY_FILE: "/etc/secrets/{{ gateway.cp_tls_secret_name }}/tls.key"
+    KONG_ADMIN_CA_CERT_FILE: "/etc/secrets/{{ gateway.cp_tls_secret_name }}/ca.crt"
+    KONG_ADMIN_TLS_SERVER_NAME: "pod.{{ gateway.namespace }}-gateway-kong-admin.{{ gateway.namespace }}.svc"
+    publish_service: {{ gateway.namespace }}/{{ gateway.namespace }}-gateway-kong-proxy
+    feature_gates: GatewayAlpha=true
+    gateway_api_controller_name: konghq.com/kic-gateway-controller-{{ gateway.namespace }}
+    
+  # This section is any customer specific environments variables that doesn't require CONTROLLER_ prefix.
+  # Example as below, uncomment if required and add additional attributes as required.
+  customEnv:
+    TZ: "Europe/Paris"
+
+  # Load all ConfigMap or Secret keys as environment variables:
+  # https://kubernetes.io/docs/tasks/configure-pod-container/configure-pod-configmap/#configure-all-key-value-pairs-in-a-configmap-as-container-environment-variables
+  envFrom: []
+
+  admissionWebhook:
+    matchPolicy: Equivalent
+    enabled: true
+    # Limit the `secrets.plugins.validation.ingress-controller.konghq.com` webhook
+    # to only Secrets with the appropriate KIC "konghq.com/validate" label.
+    filterSecrets: false
+    failurePolicy: Ignore
+    port: 8080
+    certificate:
+      provided: false
+    #  namespaceSelector specifies namespaces in which the resources are validated by the `*.validations.kong.konghq.com` webhooks.
+    #  For example, the `kube-system` namespace contains objects created by the Kubernetes system, like `kube-dns` service.
+    #  You can exclude the kube-system namespace from being intercepted using below namespaceSelector:
+    #  namespaceSelector:
+    #    matchExpressions:
+    #      - key: kubernetes.io/metadata.name
+    #        operator: NotIn
+    #        values:
+    #          - kube-system
+    namespaceSelector: {}
+    # ObjectSelector specifies which objects to match against validations.kong.konghq.com webhook webhook
+    objectSelector:
+      matchExpressions:
+        - key: owner
+          operator: NotIn
+          values:
+            - helm
+    # Specifiy the secretName when the certificate is provided via a TLS secret
+    # secretName: ""
+    # Specifiy the CA bundle of the provided certificate.
+    # This is a PEM encoded CA bundle which will be used to validate the webhook certificate. If unspecified, system trust roots on the apiserver are used.
+    # caBundle:
+    #   | Add the CA bundle content here.
+    service:
+      # Specify custom labels for the validation webhook service.
+      labels: {}
+    # Tune the default Kubernetes timeoutSeconds of 10 seconds
+    # timeoutSeconds: 10
+
+  ingressClass: kong
+  # Check existence and create the `IngressClass` with given name in the cluster.
+  # You can set it to `false` to disable the creation of `IngressClass` if your user to run helm does not have the permission to create `IngressClass`es.
+  createIngressClass: true
+  # annotations for IngressClass resource (Kubernetes 1.18+)
+  ingressClassAnnotations: {}
+
+  ## Define any volumes and mounts you want present in the ingress controller container
+  ## Volumes are defined above in deployment.userDefinedVolumes
+  userDefinedVolumeMounts:
+    - name: "{{ gateway.cp_tls_secret_name }}"
+      mountPath: "/etc/secrets/{{ gateway.cp_tls_secret_name }}"
+      readOnly: true
+
+  rbac:
+    # Specifies whether RBAC resources should be created
+    create: true
+    # Set to `false` to disable creating ClusterRole and ClusterRoleBinding, for the use cases where using ClusterRoles is not allowed.
+    # Warning: Reconciliation of some resources requires a ClusterRole because the controllers needs to watch cluster scoped resources.
+    # Disabling ClusterRoles causes them fail, so you need to disable the controllers when setting it to `false`.
+    # The resources includes:
+    # - All gateway API resources
+    # - `IngressClass`
+    # - `KNative/Ingress` (KIC 2.x only)
+    # - `KongClusterPlugin`
+    # - `KongVault`, `KongLicense` (KIC 3.1 and above)
+    enableClusterRoles: true
+    gatewayAPI:
+      # Specifies whether RBAC policy rules for Gateway API resources should
+      # be generated regardless of the presence of Gateway API CRDs in the cluster.
+      # If this is disabled then RBAC policy rules for Gateway API resources will
+      # only be generated if the Gateway API CRDs are present in the cluster.
+      enabled: true
+
+  # general properties
+  livenessProbe:
+    httpGet:
+      path: "/healthz"
+      port: 10254
+      scheme: HTTP
+    initialDelaySeconds: 5
+    timeoutSeconds: 5
+    periodSeconds: 10
+    successThreshold: 1
+    failureThreshold: 3
+  readinessProbe:
+    httpGet:
+      path: "/readyz"
+      port: 10254
+      scheme: HTTP
+    initialDelaySeconds: 5
+    timeoutSeconds: 5
+    periodSeconds: 10
+    successThreshold: 1
+    failureThreshold: 3
+  resources: {}
+  # Example reasonable setting for "resources":
+  # resources:
+  #   limits:
+  #     cpu: 100m
+  #     memory: 256Mi
+  #   requests:
+  #     cpu: 50m
+  #     memory: 128Mi
+
+  konnect:
+    enabled: false
+
+
+# Specify Kong cluster service and listener configuration
+#
+# The cluster service *must* use TLS. It does not support the "http" block
+# available on other services.
+#
+# The cluster service cannot be exposed through an Ingress, as it must perform
+# TLS client validation directly and is not compatible with TLS-terminating
+# proxies. If you need to expose it externally, you must use "type:
+# LoadBalancer" and use a TCP-only load balancer (check your Kubernetes
+# provider's documentation, as the configuration required for this varies).
+cluster:
+  enabled: false
+  # To specify annotations or labels for the cluster service, add them to the respective
+  # "annotations" or "labels" dictionaries below.
+  annotations: {}
+  #  service.beta.kubernetes.io/aws-load-balancer-proxy-protocol: "*"
+  labels: {}
+
+  tls:
+    enabled: true
+    servicePort: 8005
+    containerPort: 8005
+    parameters: []
+
+  type: ClusterIP
+  loadBalancerClass:
+
+  # Kong cluster ingress settings. Useful if you want to split CP and DP
+  # in different clusters.
+  ingress:
+    # Enable/disable exposure using ingress.
+    enabled: false
+    ingressClassName:
+    # TLS secret name.
+    # tls: kong-cluster.example.com-tls
+    # Ingress hostname
+    hostname:
+    # Map of ingress annotations.
+    annotations: {}
+    # Ingress path.
+    path: /
+    # Each path in an Ingress is required to have a corresponding path type. (ImplementationSpecific/Exact/Prefix)
+    pathType: ImplementationSpecific
+    
+deployment:
+  kong:
+    enabled: false
+    
+migrations:
+  preUpgrade: false
+  postUpgrade: false
+
+# Specify Kong proxy service configuration
+admin:
+  enabled: false
+
+proxy:
+  enabled: false
+
+postgresql:
+  enabled: false
+
+certificates:
+  enabled: false
+
+enterprise:
+  enabled: false
+
+manager:
+  enabled: false
+
+portal:
+  enabled: false
+
+portalapi:
+  enabled: false
+
+clustertelemetry:
+  enabled: false

@@ -1,0 +1,144 @@
+- name: Read the default issuer reference for the PKI engine
+  community.hashi_vault.vault_read:
+    token: "{{ pkiserver_token }}"
+    url: "https://127.0.0.1:8200"
+    validate_certs: false
+    path: "{{ issuer.intermediate_cert_name }}/config/issuers"
+  delegate_to: pkiserver
+  register: pki_issuer_info 
+
+- name: Create a role for the cert manager 
+  community.hashi_vault.vault_write:
+    token: "{{ pkiserver_token }}"
+    url: "https://127.0.0.1:8200"
+    validate_certs: false
+    path: "{{ issuer.intermediate_cert_name }}/roles/{{ issuer.name }}"
+    data:
+      issuer_ref: "{{ pki_issuer_info.data.data.default }}"
+      allowed_domains: "{{ issuer.allowed_domains if issuer.type == 'server' else '' }}"
+      allow_any_name: "{{ true if issuer.type == 'client' else false }}"
+      enforce_hostnames: "{{ true if issuer.type == 'server' else false }}"
+      allow_subdomains: "{{ issuer.allow_subdomains | default(false) if issuer.type == 'server' else false }}"
+      allow_bare_domains: "{{ true if issuer.type == 'server' else false }}"
+      server_flag: "{{ true if issuer.type == 'server' else false }}"
+      client_flag: "{{ true if issuer.type == 'client' else false }}"
+      max_ttl: "720h"
+      require_cn: false
+  delegate_to: pkiserver
+
+- name: "Create or Update Vault policy for {{ issuer.name }}"
+  community.hashi_vault.vault_write:
+    path: "sys/policies/acl/{{ issuer.name }}-policy"
+    data:
+      policy: |
+        # This policy grants permission to sign certificates
+        # using the '{{ issuer.name }}' PKI role.
+        path "platform_kube_intermediate_ca/sign/{{ issuer.name }}" {
+          capabilities = ["create","update"]
+        }
+    token: "{{ pkiserver_token }}"
+    url: "https://127.0.0.1:8200"
+    validate_certs: false
+  delegate_to: pkiserver
+  
+- name: Bind policy to Kubernetes auth role using vault_write
+  community.hashi_vault.vault_write:
+    path: "auth/kubernetes/role/{{ issuer.name }}"
+    data:
+      bound_service_account_names:
+        - "{{ issuer.issuer_service_account }}"
+      bound_service_account_namespaces:
+        - "{{ issuer.namespace }}"
+      
+      token_policies:
+        - "{{ issuer.name }}-policy"
+      token_ttl: "24h"
+    token: "{{ pkiserver_token }}"
+    url: "https://127.0.0.1:8200"
+    validate_certs: false
+  delegate_to: pkiserver
+  
+- name: Create ressource directory
+  file:
+    path: "/root/.kube/ressources/{{ issuer.ressource_directory }}"
+    state: directory
+    mode: '0755'
+  delegate_to: masternode
+  
+- name: "Create the {{ issuer.namespace }} namespace"
+  kubernetes.core.k8s:
+    name: "{{ issuer.namespace }}"
+    api_version: v1
+    kind: Namespace
+    state: present
+  delegate_to: masternode
+    
+  
+- name: Render namespaced issuer rbac template and copy to remote machine
+  ansible.builtin.template:
+    src: "../ressources/k8s/templates/cert-manager-rbac.yml.j2"
+    dest: "/root/.kube/ressources/{{ issuer.ressource_directory }}/{{ issuer.name }}-rbac.yml"
+    mode: '0644'
+  delegate_to: masternode
+
+- name: Apply the kubernetes issuer rbac manifest
+  kubernetes.core.k8s:
+    state: present
+    src: /root/.kube/ressources/{{ issuer.ressource_directory }}/{{ issuer.name }}-rbac.yml
+  delegate_to: masternode
+    
+- name: Render namespaced Issuer template and copy to remote machine
+  ansible.builtin.template:
+    src: "../ressources/k8s/templates/issuer.yml.j2"
+    dest: "/root/.kube/ressources/{{ issuer.ressource_directory }}/{{ issuer.name }}.yml"
+    mode: '0644'
+  delegate_to: masternode
+    
+- name: Apply the kubernetes issuer manifest
+  kubernetes.core.k8s:
+    state: present
+    src: /root/.kube/ressources/{{ issuer.ressource_directory }}/{{ issuer.name }}.yml
+  delegate_to: masternode
+
+- name: Fetch the CA certificate content from the Vault server
+  ansible.builtin.slurp:
+    src: /opt/vault/tls/vault-ca.crt
+  register: slurped_ca_cert
+  delegate_to: pkiserver
+
+- name: Patch Issuer with the Vault CA Bundle
+  kubernetes.core.k8s_json_patch:
+    api_version: cert-manager.io/v1
+    kind: Issuer
+    name: "{{ issuer.name }}"
+    namespace: "{{ issuer.namespace }}"
+    patch:
+      - op: add
+        path: /spec/vault/caBundle
+        value: "{{ slurped_ca_cert.content }}"
+  delegate_to: masternode
+    
+- name: Render namespaced issuer certificate template and copy to remote machine
+  loop: "{{ issuer.certificate_requests | default([]) }}"
+  loop_control:
+    loop_var: cert_request
+  ansible.builtin.template:
+    src: "../ressources/k8s/templates/certificate.yml.j2"
+    dest: "/root/.kube/ressources/{{ issuer.ressource_directory }}/{{ cert_request.certificate_name }}-certificate.yml"
+    mode: '0644'
+  delegate_to: masternode
+
+- name: Apply the kubernetes issuer certificate manifest
+  loop: "{{ issuer.certificate_requests | default([]) }}"
+  loop_control:
+    loop_var: cert_request
+  kubernetes.core.k8s:
+    state: present
+    src: /root/.kube/ressources/{{ issuer.ressource_directory }}/{{ cert_request.certificate_name }}-certificate.yml
+  delegate_to: masternode
+  environment:
+    KUBECONFIG: /etc/rancher/rke2/rke2.yaml
+
+    
+
+      

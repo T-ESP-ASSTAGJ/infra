@@ -1,0 +1,39 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ cert_request.certificate_name }}-certificate
+  namespace: {{ issuer.namespace }}
+spec:
+  secretName: {{ cert_request.certificate_name }}-tls
+  
+  duration: 2160h # 90j
+  renewBefore: 360h # 15j
+
+  issuerRef:
+    name: {{ issuer.name }}
+    kind: Issuer
+
+{% if cert_request.usage is defined and cert_request.usage == "client" %}   
+  usages:
+    - client auth
+    - digital signature
+{% endif %}
+
+{% if cert_request.usage is defined and cert_request.usage == "server" %}   
+  usages:
+    - server auth
+{% endif %}
+
+{% if cert_request.common_name is defined and cert_request.common_name %}
+  commonName: {{ cert_request.common_name }}
+{% endif %}
+
+{% if cert_request.requested_domains is defined and cert_request.requested_domains %}
+  dnsNames:
+    {{ cert_request.requested_domains | to_yaml | indent(4, true) }}
+{% endif %}
+
+{% if cert_request.ip_sans is defined and cert_request.ip_sans %}
+  ipAddresses:
+    {{ cert_request.ip_sans | to_yaml | indent(4, true) }}
+{% endif %}

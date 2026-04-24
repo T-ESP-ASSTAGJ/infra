@@ -1,0 +1,9 @@
+apiVersion: metallb.io/v1beta2
+kind: BGPPeer
+metadata:
+  name: openbsd-gateway
+  namespace: metallb-system
+spec:
+  peerAddress: 192.168.10.1        # IP de la passerelle OpenBSD
+  peerASN: 65001                   # ASN de la passerelle
+  myASN: 64512                     # ASN de MetalLB

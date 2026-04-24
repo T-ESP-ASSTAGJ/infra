@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ issuer.issuer_service_account }}
+  namespace: {{ issuer.namespace }}
+  
+---
+
+apiVersion: cert-manager.io/v1
+kind: Issuer  
+metadata:
+  name: {{ issuer.name }}
+  namespace: {{ issuer.namespace }} 
+spec:
+  vault:
+    server: {{ issuer.pki_server_url }}
+    path: {{ issuer.pki_server_signing_path }}
+    auth:
+      kubernetes:
+        mountPath: "/v1/auth/kubernetes"
+        role: "{{ issuer.name }}"
+        serviceAccountRef:
+          name: {{ issuer.issuer_service_account }}
