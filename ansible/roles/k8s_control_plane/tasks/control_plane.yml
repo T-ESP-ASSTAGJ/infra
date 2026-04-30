@@ -88,6 +88,16 @@
         mode: '0700'
       when: control_plane_join_command.stdout != ""
 
+- name: Wait for API server before CoreDNS check
+  ansible.builtin.uri:
+    url: "https://{{ k8s_advertise_address | default(ansible_default_ipv4.address) }}:6443/healthz"
+    validate_certs: false
+    status_code: 200
+  register: apiserver_health
+  retries: 30
+  delay: 10
+  until: apiserver_health.status == 200
+
 - name: Ensure CoreDNS forwards to Azure upstream DNS
   block:
     - name: Get current CoreDNS config

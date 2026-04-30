@@ -71,6 +71,14 @@
       delay: 10
       changed_when: false
 
+    - name: Allow scheduling on control plane (single-node / dev cluster)
+      ansible.builtin.command: >
+        kubectl taint nodes --all node-role.kubernetes.io/control-plane:NoSchedule-
+      environment:
+        KUBECONFIG: /etc/kubernetes/admin.conf
+      changed_when: true
+      failed_when: false
+
     - name: Install Cilium using CLI
       ansible.builtin.command: >
         cilium install
