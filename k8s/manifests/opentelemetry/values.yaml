@@ -1,3 +1,6 @@
+image:
+  repository: otel/opentelemetry-collector-contrib
+
 mode: daemonset
 
 presets:
