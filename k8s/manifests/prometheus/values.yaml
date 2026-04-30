@@ -38,7 +38,7 @@ grafana:
           wget -O /tmp/quickwit-plugin.zip https://github.com/quickwit-oss/quickwit-datasource/releases/latest/download/quickwit-quickwit-datasource.zip
           unzip /tmp/quickwit-plugin.zip -d /var/lib/grafana/plugins/
       volumeMounts:
-        - name: grafana-storage
+        - name: storage
           mountPath: /var/lib/grafana
 
   additionalDataSources:
