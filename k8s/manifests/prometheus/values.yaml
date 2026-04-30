@@ -9,6 +9,14 @@ prometheus:
         memory: "1Gi"
         cpu: "500m"
 
+prometheusOperator:
+  admissionWebhooks:
+    enabled: true
+    patch:
+      enabled: true
+      jobAnnotations:
+        "helm.sh/hook-delete-policy": "before-hook-creation,hook-succeeded"
+
 grafana:
   resources:
     requests:
