@@ -11,11 +11,9 @@ prometheus:
 
 prometheusOperator:
   admissionWebhooks:
-    enabled: true
+    enabled: false
     patch:
-      enabled: true
-      jobAnnotations:
-        "helm.sh/hook-delete-policy": "before-hook-creation,hook-succeeded"
+      enabled: false
 
 grafana:
   resources:
