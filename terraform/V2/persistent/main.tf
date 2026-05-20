@@ -348,7 +348,7 @@ resource "azurerm_application_gateway" "appgw" {
 
 # Key Vault for SSL certificates
 resource "azurerm_key_vault" "certs" {
-  name                       = "${var.project_name}-keyvl"
+  name                       = "${var.project_name}-kvaalt"
   location                   = azurerm_resource_group.rg.location
   resource_group_name        = azurerm_resource_group.rg.name
   tenant_id                  = data.azurerm_client_config.current.tenant_id
@@ -415,7 +415,7 @@ resource "azurerm_user_assigned_identity" "eso" {
 
 
 resource "azurerm_storage_account" "storage_account" {
-  name                     = "${replace(var.project_name, "-", "")}sa"
+  name                     = "${replace(var.project_name, "-", "")}sta"
   resource_group_name      = azurerm_resource_group.rg.name
   location                 = azurerm_resource_group.rg.location
   account_tier             = "Standard"

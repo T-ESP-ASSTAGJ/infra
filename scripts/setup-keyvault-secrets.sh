@@ -9,7 +9,7 @@ set -euo pipefail
 # Usage:
 #   ./scripts/setup-keyvault-secrets.sh
 
-KEYVAULT_NAME="jamly-persistent-keyvl"
+KEYVAULT_NAME="jamly-persistent-kvaalt"
 
 echo "Target Key Vault: ${KEYVAULT_NAME}"
 echo ""

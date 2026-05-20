@@ -249,7 +249,7 @@ resource "azurerm_linux_virtual_machine" "worker" {
 }
 
 resource "azurerm_postgresql_flexible_server" "server-database" {
-  name                = "${var.project_name}-postgresql-server-1"
+  name                = "${var.project_name}-postgresql-server-2"
   resource_group_name = azurerm_resource_group.ephemeral.name
   location            = azurerm_resource_group.ephemeral.location
   zone                = "3"

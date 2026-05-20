@@ -26,7 +26,7 @@ variable "project_name" {
 variable "location" {
   description = "Azure region for resources"
   type        = string
-  default     = "swedencentral"
+  default     = "polandcentral"
 }
 
 variable "tags" {
@@ -52,13 +52,13 @@ variable "ssh_public_key" {
 variable "vm_size_control_plane" {
   description = "Azure VM size for the Kubernetes control plane"
   type        = string
-  default     = "Standard_B4s_v2"
+  default     = "Standard_B2s_v2"
 }
 
 variable "vm_size_worker" {
-  description = "Azure VM size for the Kubernetes worker node (~€27/month for Standard_B2ls_v2)"
+  description = "Azure VM size for the Kubernetes worker node"
   type        = string
-  default     = "Standard_B2ls_v2"
+  default     = "Standard_B4s_v2"
 }
 
 variable "db_admin_login" {
