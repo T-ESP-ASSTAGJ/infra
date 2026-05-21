@@ -41,10 +41,14 @@ set_secret() {
 
 # ── Set secrets ───────────────────────────────────────────────────────────────
 
-set_secret "app-secret"          "Symfony APP_SECRET"
-set_secret "mercure-jwt-secret"  "Mercure JWT secret"
-set_secret "database-url"        "Database URL (e.g. postgresql://user:pass@host:5432/db)"
-set_secret "github-token"         "GitHub Personal Access Token (read:repo)"
+set_secret "app-secret"                      "Symfony APP_SECRET"
+set_secret "mercure-jwt-secret"              "Mercure JWT secret"
+set_secret "database-url"                    "Database URL (e.g. postgresql://user:pass@host:5432/db)"
+set_secret "github-token"                    "GitHub Personal Access Token (read:repo)"
+set_secret "mailer-dsn"                      "Mailer DSN (e.g. gmail+smtp://user:app-password@default)"
+set_secret "jwt-passphrase"                  "JWT passphrase"
+set_secret "azure-storage-account-key"       "Azure Storage account key"
+set_secret "azure-storage-connection-string" "Azure Storage connection string"
 
 echo ""
 echo "Done. Verify with:"

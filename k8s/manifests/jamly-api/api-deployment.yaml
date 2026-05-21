@@ -23,11 +23,25 @@ spec:
         - containerPort: 80
         env:
         - name: APP_ENV
-          value: "staging"
+          value: "prod"
         - name: REDIS_URL
           value: "redis://redis.jamly-api.svc.cluster.local:6379"
         - name: MERCURE_PUBLIC_URL
           value: "https://api.jamly.eu/.well-known/mercure"
+        - name: CORS_ALLOW_ORIGIN
+          value: "^https?://(.*\\.)?jamly\\.eu$"
+        - name: JWT_SECRET_KEY
+          value: "%kernel.project_dir%/config/jwt/private.pem"
+        - name: JWT_PUBLIC_KEY
+          value: "%kernel.project_dir%/config/jwt/public.pem"
+        - name: MESSENGER_TRANSPORT_DSN
+          value: "redis://redis.jamly-api.svc.cluster.local:6379/messages"
+        - name: AZURE_STORAGE_ACCOUNT_NAME
+          value: "jamlypersistentsa"
+        - name: AZURE_STORAGE_CONTAINER
+          value: "jamly-persistent-content"
+        - name: AZURE_STORAGE_BASE_URL
+          value: "https://jamlypersistentsa.blob.core.windows.net/jamly-persistent-content"
         envFrom:
         - secretRef:
             name: jamly-api-secrets
