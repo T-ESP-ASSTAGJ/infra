@@ -49,6 +49,18 @@ variable "custom_domain_argocd" {
   default     = ""
 }
 
+variable "custom_domain_grafana" {
+  description = "Custom domain for Grafana UI"
+  type        = string
+  default     = ""
+}
+
+variable "custom_domain_hubble" {
+  description = "Custom domain for Hubble UI"
+  type        = string
+  default     = ""
+}
+
 variable "web_ssl_cert_secret_id" {
   description = "Key Vault secret ID for web SSL certificate"
   type        = string

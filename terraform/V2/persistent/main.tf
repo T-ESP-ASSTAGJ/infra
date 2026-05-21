@@ -468,6 +468,28 @@ resource "cloudflare_record" "argocd" {
   comment = "Managed by Terraform (persistent) - ArgoCD ${local.environment} environment"
 }
 
+resource "cloudflare_record" "grafana" {
+  count   = var.custom_domain_grafana != "" && var.cloudflare_zone_id != "" ? 1 : 0
+  zone_id = var.cloudflare_zone_id
+  name    = trimsuffix(var.custom_domain_grafana, ".jamly.eu")
+  content = azurerm_public_ip.gateway.ip_address
+  type    = "A"
+  ttl     = 1
+  proxied = true
+  comment = "Managed by Terraform (persistent) - Grafana ${local.environment} environment"
+}
+
+resource "cloudflare_record" "hubble" {
+  count   = var.custom_domain_hubble != "" && var.cloudflare_zone_id != "" ? 1 : 0
+  zone_id = var.cloudflare_zone_id
+  name    = trimsuffix(var.custom_domain_hubble, ".jamly.eu")
+  content = azurerm_public_ip.gateway.ip_address
+  type    = "A"
+  ttl     = 1
+  proxied = true
+  comment = "Managed by Terraform (persistent) - Hubble ${local.environment} environment"
+}
+
 # Auto-generate ephemeral/persistent.auto.tfvars — loaded automatically by Terraform alongside terraform.tfvars
 resource "local_file" "ephemeral_tfvars" {
   filename        = "${path.module}/../ephemeral/persistent.auto.tfvars"
