@@ -31,9 +31,9 @@ spec:
         - name: CORS_ALLOW_ORIGIN
           value: "^https?://(.*\\.)?jamly\\.eu$"
         - name: JWT_SECRET_KEY
-          value: "%kernel.project_dir%/config/jwt/private.pem"
+          value: "/var/jwt/private.pem"
         - name: JWT_PUBLIC_KEY
-          value: "%kernel.project_dir%/config/jwt/public.pem"
+          value: "/var/jwt/public.pem"
         - name: MESSENGER_TRANSPORT_DSN
           value: "redis://redis.jamly-api.svc.cluster.local:6379/messages"
         - name: AZURE_STORAGE_ACCOUNT_NAME
@@ -45,3 +45,17 @@ spec:
         envFrom:
         - secretRef:
             name: jamly-api-secrets
+        volumeMounts:
+        - name: jwt-keys
+          mountPath: /var/jwt
+          readOnly: true
+      volumes:
+      - name: jwt-keys
+        secret:
+          secretName: jamly-api-secrets
+          defaultMode: 0400
+          items:
+          - key: JWT_PRIVATE_KEY
+            path: private.pem
+          - key: JWT_PUBLIC_KEY
+            path: public.pem
