@@ -41,7 +41,7 @@ spec:
         - name: AZURE_STORAGE_CONTAINER
           value: "jamly-persistent-content"
         - name: AZURE_STORAGE_BASE_URL
-          value: "https://jamlypersistentsa.blob.core.windows.net/jamly-persistent-content"
+          value: "https://jamlypersistentsta.blob.core.windows.net/jamly-persistent-content"
         envFrom:
         - secretRef:
             name: jamly-api-secrets
