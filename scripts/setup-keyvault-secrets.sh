@@ -77,6 +77,7 @@ set_secret "azure-storage-account-key"       "Azure Storage account key"
 set_secret "azure-storage-connection-string" "Azure Storage connection string"
 set_secret_from_file "jwt-private-key"       "JWT private key (config/jwt/private.pem)"
 set_secret_from_file "jwt-public-key"        "JWT public key  (config/jwt/public.pem)"
+set_secret_from_file "firebase-credentials"  "Firebase service account JSON (jamly-6048b-firebase.json)"
 
 echo ""
 echo "Done. Verify with:"

@@ -54,6 +54,9 @@ spec:
         - name: jwt-keys
           mountPath: /var/jwt
           readOnly: true
+        - name: firebase-credentials
+          mountPath: /config/secrets
+          readOnly: true
       volumes:
       - name: jwt-keys
         secret:
@@ -64,3 +67,10 @@ spec:
             path: private.pem
           - key: JWT_PUBLIC_KEY
             path: public.pem
+      - name: firebase-credentials
+        secret:
+          secretName: jamly-api-secrets
+          defaultMode: 0400
+          items:
+          - key: FIREBASE_CREDENTIALS
+            path: jamly-6048b-firebase.json
