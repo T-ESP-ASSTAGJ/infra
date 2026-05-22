@@ -26,6 +26,8 @@ spec:
           value: "prod"
         - name: REDIS_URL
           value: "redis://redis.jamly-api.svc.cluster.local:6379"
+        - name: MERCURE_URL
+          value: "http://jamly-api.jamly-api.svc.cluster.local/.well-known/mercure"
         - name: MERCURE_PUBLIC_URL
           value: "https://api.jamly.eu/.well-known/mercure"
         - name: CORS_ALLOW_ORIGIN
