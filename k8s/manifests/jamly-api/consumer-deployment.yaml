@@ -1,0 +1,66 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jamly-api-consumer
+  namespace: jamly-api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: jamly-api-consumer
+  template:
+    metadata:
+      labels:
+        app: jamly-api-consumer
+    spec:
+      nodeSelector:
+        node-role.kubernetes.io/worker: ""
+      containers:
+      - name: consumer
+        image: ghcr.io/t-esp-asstagj/api:staging
+        imagePullPolicy: Always
+        command: ["php"]
+        args:
+          - bin/console
+          - messenger:consume
+          - async
+          - --memory-limit=128M
+          - -vv
+        env:
+        - name: APP_ENV
+          value: "prod"
+        - name: REDIS_URL
+          value: "redis://redis.jamly-api.svc.cluster.local:6379"
+        - name: MERCURE_PUBLIC_URL
+          value: "https://api.jamly.eu/.well-known/mercure"
+        - name: CORS_ALLOW_ORIGIN
+          value: "^https?://(.*\\.)?jamly\\.eu$"
+        - name: JWT_SECRET_KEY
+          value: "/var/jwt/private.pem"
+        - name: JWT_PUBLIC_KEY
+          value: "/var/jwt/public.pem"
+        - name: MESSENGER_TRANSPORT_DSN
+          value: "redis://redis.jamly-api.svc.cluster.local:6379/messages"
+        - name: AZURE_STORAGE_ACCOUNT_NAME
+          value: "jamlypersistentsa"
+        - name: AZURE_STORAGE_CONTAINER
+          value: "jamly-persistent-content"
+        - name: AZURE_STORAGE_BASE_URL
+          value: "https://jamlypersistentsta.blob.core.windows.net/jamly-persistent-content"
+        envFrom:
+        - secretRef:
+            name: jamly-api-secrets
+        volumeMounts:
+        - name: jwt-keys
+          mountPath: /var/jwt
+          readOnly: true
+      volumes:
+      - name: jwt-keys
+        secret:
+          secretName: jamly-api-secrets
+          defaultMode: 0400
+          items:
+          - key: JWT_PRIVATE_KEY
+            path: private.pem
+          - key: JWT_PUBLIC_KEY
+            path: public.pem

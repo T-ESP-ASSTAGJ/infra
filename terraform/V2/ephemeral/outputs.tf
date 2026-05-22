@@ -12,3 +12,8 @@ output "worker_private_ip" {
   description = "Private IP of the worker VM — reached via ProxyJump through the control plane"
   value       = azurerm_network_interface.worker.private_ip_address
 }
+
+output "db_fqdn" {
+  description = "Postgres Flexible Server FQDN — resolves to a private IP from inside the VNet (use via SSH tunnel from the control plane)"
+  value       = azurerm_postgresql_flexible_server.server-database.fqdn
+}
