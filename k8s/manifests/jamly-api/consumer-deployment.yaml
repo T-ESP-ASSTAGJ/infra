@@ -57,7 +57,8 @@ spec:
           mountPath: /var/jwt
           readOnly: true
         - name: firebase-credentials
-          mountPath: /config/secrets
+          mountPath: /app/config/secrets/jamly-6048b-firebase.json
+          subPath: jamly-6048b-firebase.json
           readOnly: true
       volumes:
       - name: jwt-keys
